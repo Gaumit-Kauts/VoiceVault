@@ -1,0 +1,5 @@
+﻿flask
+openai
+supabase
+python-dotenv
+werkzeug
