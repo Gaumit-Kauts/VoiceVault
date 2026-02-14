@@ -1,1 +1,2 @@
-# CalgaryHack26
+# AI-Titan
+### CalgaryHack26 project
