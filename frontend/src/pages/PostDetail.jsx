@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { ArrowLeft, Clock, Download, Share2, Calendar, Globe, Lock, Play, Pause, Volume2 } from 'lucide-react'
+import { ArrowLeft, Clock, Download, Share2, Calendar, Globe, Lock, Play, Pause, Volume2, User } from 'lucide-react'
 import { api } from '../api'
 
 export default function PostDetail({ postId, user, onBack }) {
@@ -9,6 +9,7 @@ export default function PostDetail({ postId, user, onBack }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [downloading, setDownloading] = useState(false)
+  const [author, setAuthor] = useState(null)
 
   // Audio player state
   const [isPlaying, setIsPlaying] = useState(false)
@@ -31,6 +32,22 @@ export default function PostDetail({ postId, user, onBack }) {
       audioRef.current.load()
     }
   }, [post?.audio_url])
+
+  // Load author when post loads
+  useEffect(() => {
+    if (post?.user_id) {
+      loadAuthor()
+    }
+  }, [post?.user_id])
+
+  const loadAuthor = async () => {
+    try {
+      const userData = await api.getUser(post.user_id)
+      setAuthor(userData)
+    } catch (err) {
+      console.error('Failed to load author:', err)
+    }
+  }
 
   const loadPostData = async () => {
     setLoading(true)
@@ -89,6 +106,17 @@ export default function PostDetail({ postId, user, onBack }) {
     if (!metadata?.prompt) return null
     const match = metadata.prompt.match(/Transcript:\n([\s\S]*?)\n\nAnswer user questions/)
     return match ? match[1].trim() : null
+  }
+
+  const getAuthorDisplayName = () => {
+    if (!author) return 'Loading...'
+    return author.display_name || author.email?.split('@')[0] || 'Unknown Author'
+  }
+
+  const getAuthorInitials = () => {
+    if (!author) return '?'
+    const name = author.display_name || author.email?.split('@')[0] || '?'
+    return name.charAt(0).toUpperCase()
   }
 
   // Audio player handlers
@@ -219,6 +247,17 @@ export default function PostDetail({ postId, user, onBack }) {
 
       {/* Header Card */}
       <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-8">
+        {/* Author Info */}
+        <div className="flex items-center gap-3 mb-6 pb-6 border-b border-gray-200">
+          <div className="w-12 h-12 bg-gradient-to-br from-[#f4b840] to-[#e5a930] rounded-full flex items-center justify-center text-white font-semibold text-lg">
+            {getAuthorInitials()}
+          </div>
+          <div>
+            <p className="text-base font-semibold text-gray-900">{getAuthorDisplayName()}</p>
+            <p className="text-sm text-gray-500">{formatDate(post.created_at)}</p>
+          </div>
+        </div>
+
         {/* Title and Meta */}
         <div className="mb-6">
           <div className="flex items-start justify-between mb-4">
@@ -234,11 +273,6 @@ export default function PostDetail({ postId, user, onBack }) {
 
           {/* Metadata */}
           <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
-            <div className="flex items-center gap-1">
-              <Calendar size={16} />
-              <span>{formatDate(post.created_at)}</span>
-            </div>
-            <span>•</span>
             <div className={`px-2 py-1 rounded text-xs ${
               post.status === 'ready' ? 'bg-green-100 text-green-700' :
               post.status === 'processing' ? 'bg-yellow-100 text-yellow-700' :
@@ -414,6 +448,12 @@ export default function PostDetail({ postId, user, onBack }) {
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Metadata</h2>
           <dl className="grid grid-cols-2 gap-4 text-sm">
+            {author && (
+              <>
+                <dt className="text-gray-600">Author:</dt>
+                <dd className="text-gray-900 font-medium">{getAuthorDisplayName()}</dd>
+              </>
+            )}
             {metadata.source_file && (
               <>
                 <dt className="text-gray-600">Source File:</dt>

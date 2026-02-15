@@ -115,11 +115,7 @@ export default function History({ user, onViewPost }) {
       </div>
 
       {/* My Posted Archives */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-          <FileText size={20} />
-          My Posted Archives
-        </h3>
+      <div className="bg-white">
 
         {posts.length > 0 ? (
           <div className="space-y-3">

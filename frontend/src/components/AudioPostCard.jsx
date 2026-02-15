@@ -1,4 +1,4 @@
-import { Clock, Download, ExternalLink } from 'lucide-react'
+import { Clock, Download, ExternalLink, User } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { api } from '../api'
 import AudioPlayer from './AudioPlayer'
@@ -7,12 +7,29 @@ export default function AudioPostCard({ post, onViewPost }) {
   const [transcript, setTranscript] = useState(null)
   const [loadingTranscript, setLoadingTranscript] = useState(false)
   const [downloading, setDownloading] = useState(false)
+  const [author, setAuthor] = useState(null)
 
   useEffect(() => {
     console.log('Post data:', post)
     console.log('Audio URL:', post.audio_url)
     console.log('Status:', post.status)
   }, [post])
+
+  // Load author data
+  useEffect(() => {
+    if (post.user_id) {
+      loadAuthor()
+    }
+  }, [post.user_id])
+
+  const loadAuthor = async () => {
+    try {
+      const userData = await api.getUser(post.user_id)
+      setAuthor(userData)
+    } catch (err) {
+      console.error('Failed to load author:', err)
+    }
+  }
 
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -81,10 +98,32 @@ export default function AudioPostCard({ post, onViewPost }) {
     }
   }
 
+  const getAuthorDisplayName = () => {
+    if (!author) return 'Loading...'
+    return author.display_name || author.email?.split('@')[0] || 'Unknown Author'
+  }
+
+  const getAuthorInitials = () => {
+    if (!author) return '?'
+    const name = author.display_name || author.email?.split('@')[0] || '?'
+    return name.charAt(0).toUpperCase()
+  }
+
   return (
     <article className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow">
       {/* Post Header */}
       <div className="p-6 pb-4">
+        {/* Author Info */}
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 bg-gradient-to-br from-[#f4b840] to-[#e5a930] rounded-full flex items-center justify-center text-white font-semibold">
+            {getAuthorInitials()}
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-medium text-gray-900">{getAuthorDisplayName()}</p>
+            <p className="text-xs text-gray-500">{formatDate(post.created_at)}</p>
+          </div>
+        </div>
+
         <div className="flex items-start justify-between mb-4">
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">
@@ -96,9 +135,6 @@ export default function AudioPostCard({ post, onViewPost }) {
               )}
             </div>
             <div className="flex items-center gap-2 text-sm text-gray-500">
-              <Clock size={14} />
-              <span>{formatDate(post.created_at)}</span>
-              <span>•</span>
               <span className={`px-2 py-0.5 rounded text-xs ${
                 post.status === 'ready' ? 'bg-green-100 text-green-700' :
                 post.status === 'processing' ? 'bg-yellow-100 text-yellow-700' :
@@ -106,18 +142,19 @@ export default function AudioPostCard({ post, onViewPost }) {
               }`}>
                 {post.status}
               </span>
-              <span>•</span>
               {post.language && (
-                <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded">
-                  {post.language.toUpperCase()}
-                </span>
+                <>
+                  <span>•</span>
+                  <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded">
+                    {post.language.toUpperCase()}
+                  </span>
+                </>
               )}
             </div>
           </div>
 
           {/* Action Buttons */}
           <div className="flex items-center gap-2">
-
             {post.status === 'ready' && (
               <button
                 onClick={handleDownload}
@@ -146,7 +183,6 @@ export default function AudioPostCard({ post, onViewPost }) {
                 <span>View Post</span>
                 <ExternalLink size={14} />
               </button>
-
             )}
           </div>
         </div>
@@ -175,9 +211,6 @@ export default function AudioPostCard({ post, onViewPost }) {
                 <p className="text-sm text-gray-500 italic">No transcript available</p>
               )}
             </div>
-
-
-
           </>
         )}
 
