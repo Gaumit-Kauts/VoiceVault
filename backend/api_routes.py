@@ -4,16 +4,18 @@ Includes auth, upload+transcription, history, and RAG search workflow.
 """
 
 import hashlib
+import io
 import json
 import os
 import uuid
 import re
+import zipfile
 from pathlib import Path
 from typing import Any, List
 
 from dotenv import load_dotenv
 from faster_whisper import WhisperModel
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, send_file
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
@@ -23,6 +25,8 @@ from db_queries import (
     add_rag_chunks,
     create_audio_post,
     create_user,
+    download_storage_object_by_stored_path,
+    get_archive_file_by_role,
     get_archive_metadata,
     get_original_audio_url,
     get_archive_rights,
@@ -527,6 +531,64 @@ def api_post_audio_url(post_id: int):
         return _error(str(e), 404)
     except Exception as e:
         return _error(str(e), 500)
+
+
+@api.get("/posts/<int:post_id>/archive.zip")
+def api_post_archive_zip(post_id: int):
+    """
+    Download a complete archive zip for a post.
+    Private posts require owner user_id in query params.
+    """
+    row = get_audio_post_by_id(post_id)
+    if not row:
+        return _error("Post not found.", 404)
+
+    visibility = row.get("visibility")
+    owner_id = row.get("user_id")
+    requester_id = request.args.get("user_id", type=int)
+
+    if visibility == "private" and requester_id != owner_id:
+        return _error("Not authorized to download this private archive.", 403)
+
+    try:
+        bundle = get_post_bundle(post_id)
+        if not bundle:
+            return _error("Post bundle not found.", 404)
+
+        archive_buf = io.BytesIO()
+        with zipfile.ZipFile(archive_buf, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+            # Always include core JSON artifacts.
+            zf.writestr("post.json", json.dumps(bundle.get("post", {}), indent=2, default=str))
+            zf.writestr("metadata.json", json.dumps(bundle.get("metadata", {}), indent=2, default=str))
+            zf.writestr("rights.json", json.dumps(bundle.get("rights", {}), indent=2, default=str))
+            zf.writestr("rag_chunks.json", json.dumps(bundle.get("rag_chunks", []), indent=2, default=str))
+            zf.writestr("audit_log.json", json.dumps(bundle.get("audit_log", []), indent=2, default=str))
+
+            # Derive transcript from rag chunks.
+            chunks = bundle.get("rag_chunks", []) or []
+            transcript_text = " ".join(
+                (chunk.get("text") or "").strip() for chunk in chunks if chunk.get("text")
+            ).strip()
+            if transcript_text:
+                zf.writestr("transcript.txt", transcript_text)
+
+            # Include original media from Supabase Storage if present.
+            original_file = get_archive_file_by_role(post_id, "original_audio")
+            if original_file and original_file.get("path"):
+                original_bytes = download_storage_object_by_stored_path(original_file["path"])
+                source_name = original_file["path"].split("/")[-1] or f"post_{post_id}_original.bin"
+                zf.writestr(f"original/{source_name}", original_bytes)
+
+        archive_buf.seek(0)
+        download_name = f"voicevault_post_{post_id}_archive.zip"
+        return send_file(
+            archive_buf,
+            mimetype="application/zip",
+            as_attachment=True,
+            download_name=download_name,
+        )
+    except Exception as e:
+        return _error(f"Failed to build archive zip: {e}", 500)
 
 
 @api.post("/posts/<int:post_id>/files")

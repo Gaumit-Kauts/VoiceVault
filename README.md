@@ -68,6 +68,7 @@ History + RAG:
 
 Playback:
 - `GET /api/posts/<post_id>/audio-url?user_id=<id>` (required for private posts)
+- `GET /api/posts/<post_id>/archive.zip?user_id=<id>` (download archive package; required for private posts)
 
 Post data:
 - `GET /api/posts`

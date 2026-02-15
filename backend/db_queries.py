@@ -111,6 +111,30 @@ def get_original_audio_url(post_id: int, expires_in: int = 3600) -> Dict[str, An
     }
 
 
+def get_archive_file_by_role(post_id: int, role: str) -> Optional[Dict[str, Any]]:
+    response = (
+        supabase.table("archive_files")
+        .select("*")
+        .eq("post_id", post_id)
+        .eq("role", role)
+        .limit(1)
+        .execute()
+    )
+    return _first(response)
+
+
+def download_storage_object_by_stored_path(stored_path: str) -> bytes:
+    """
+    Download object bytes from a stored path like
+    'archives/user/uuid/original/file.mp4'.
+    """
+    bucket, object_path = _parse_bucket_path(stored_path)
+    content = supabase.storage.from_(bucket).download(object_path)
+    if isinstance(content, (bytes, bytearray)):
+        return bytes(content)
+    raise RuntimeError("Failed to download storage object content.")
+
+
 # ==================== Users ====================
 
 def create_user(payload: Dict[str, Any]) -> Dict[str, Any]:
