@@ -27,13 +27,16 @@ class ApiClient {
 
     try {
       const response = await fetch(url, config);
-      const data = await response.json();
+      const contentType = response.headers.get('content-type') || '';
+      const isJson = contentType.includes('application/json');
+      const data = isJson ? await response.json() : null;
 
       if (!response.ok) {
-        throw new Error(data.error || 'Request failed');
+        const fallbackError = `Request failed with status ${response.status}`;
+        throw new Error((data && data.error) || fallbackError);
       }
 
-      return data;
+      return data || {};
     } catch (error) {
       console.error('API Error:', error);
       throw error;
@@ -87,14 +90,16 @@ class ApiClient {
         method: 'POST',
         body: formData, // Don't set Content-Type, let browser set it with boundary
       });
-
-      const data = await response.json();
+      const contentType = response.headers.get('content-type') || '';
+      const isJson = contentType.includes('application/json');
+      const data = isJson ? await response.json() : null;
 
       if (!response.ok) {
-        throw new Error(data.error || 'Upload failed');
+        const fallbackError = `Upload failed with status ${response.status}`;
+        throw new Error((data && data.error) || fallbackError);
       }
 
-      return data;
+      return data || {};
     } catch (error) {
       console.error('Upload Error:', error);
       throw error;
@@ -142,10 +147,6 @@ class ApiClient {
       method: 'PUT',
       body: JSON.stringify(updates),
     });
-  }
-
-  async getPostMetadata(postId) {
-    return this.request(`/posts/${postId}/metadata`);
   }
 
   async getAudioUrl(postId, expiresIn = 3600) {

@@ -28,8 +28,8 @@ export default function EditPostModal({ post, user, onClose, onSave }) {
         visibility
       }
 
-      await api.editPost(post.post_id, updates)
-      onSave?.()
+      const updatedPost = await api.editPost(post.post_id, updates)
+      onSave?.(updatedPost)
       onClose()
     } catch (err) {
       setError(err.message || 'Failed to update post')

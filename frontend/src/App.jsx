@@ -61,6 +61,7 @@ export default function App() {
     localStorage.removeItem('voicevault_user')
     setShowLogin(true)
     setActiveTab('feed')
+    setViewingPostId(null)
   }
 
   const handleSearch = async (query) => {
@@ -91,9 +92,15 @@ export default function App() {
     setViewingPostId(null)
   }
 
+  const handleTabChange = (tab) => {
+    setActiveTab(tab)
+    setViewingPostId(null)
+  }
+
   const handlePostCreated = () => {
     // Switch to feed after creating a post
     setActiveTab('feed')
+    setViewingPostId(null)
   }
 
   const handleUserUpdate = (updatedUser) => {
@@ -202,11 +209,16 @@ export default function App() {
 
   // Main App
   return (
-    <div className="h-screen bg-gray-50 text-gray-800 flex flex-col overflow-hidden">
+    <div className="h-screen bg-white-50 text-gray-800 flex flex-col overflow-hidden">
       <Header onSearch={handleSearch} onLogout={handleLogout} onNavigateToSearch={handleNavigateToSearch} />
 
+<<<<<<< HEAD
       <div className="flex-1 flex overflow-hidden max-w-[1400px] mx-auto w-full">
+        <Sidebar user={user} activeTab={activeTab} onTabChange={handleTabChange} />
+=======
+      <div className="flex-1 flex overflow-hidden max-w-[1500px] mx-auto w-full">
         <Sidebar user={user} activeTab={activeTab} onTabChange={setActiveTab} />
+>>>>>>> cd657f37cf76773d9dd6ad7a0cdbe05e19a9eced
 
         <main className="flex-1 overflow-y-auto p-6">
           {renderPage()}

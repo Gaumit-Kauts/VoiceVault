@@ -40,7 +40,7 @@ export default function History({ user, onViewPost }) {
     try {
       await api.deletePost(postId, user.user_id)
       // Remove from local state immediately
-      setPosts(posts.filter(p => p.post_id !== postId))
+      setPosts((prev) => prev.filter((p) => p.post_id !== postId))
     } catch (err) {
       alert('Failed to delete post: ' + err.message)
     } finally {
@@ -58,8 +58,15 @@ export default function History({ user, onViewPost }) {
     setEditingPost(post)
   }
 
-  const handleSaveEdit = () => {
-    // Refresh the list after edit
+  const handleSaveEdit = (updatedPost) => {
+    if (updatedPost && updatedPost.post_id) {
+      setPosts((prev) =>
+        prev.map((post) =>
+          post.post_id === updatedPost.post_id ? { ...post, ...updatedPost } : post
+        )
+      )
+      return
+    }
     fetchHistory()
   }
 

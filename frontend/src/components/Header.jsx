@@ -23,10 +23,15 @@ export default function Header({ onSearch, onLogout, onNavigateToSearch }) {
       <div className="max-w-[1400px] mx-auto flex items-center justify-between gap-6">
         {/* Left: Logo */}
         <div className="flex items-center gap-3 flex-shrink-0">
-          <div className="w-8 h-8 bg-[#f4b840] rounded-lg flex items-center justify-center">
-            <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="w-8 h-8  rounded-lg flex items-center justify-center">
+            {/* <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-            </svg>
+            </svg> */}
+            <img
+                src="/Logo.png"
+                alt="VoiceVault Logo"
+                className="w-10 h-10 object-contain rounded-lg"
+              />
           </div>
           <h1 className="text-lg font-bold text-gray-900">VoiceVault</h1>
         </div>

@@ -868,18 +868,17 @@ def api_delete_post(post_id: int):
         return _error("You don't have permission to delete this post.", 403)
 
     try:
+        add_audit_log({
+            "user_id": user_id,
+            "action": "post.deleted",
+            "details": json.dumps({"deleted_post_id": post_id, "title": post.get("title")})
+        })
+
         delete_rag_chunks(post_id)
         delete_archive_files(post_id)
         delete_metadata(post_id)
         delete_rights(post_id)
         delete_audio_post(post_id)
-
-        add_audit_log({
-            "post_id": post_id,
-            "user_id": user_id,
-            "action": "post.deleted",
-            "details": json.dumps({"title": post.get("title")})
-        })
 
         return jsonify({"message": "Post deleted successfully", "post_id": post_id})
 
