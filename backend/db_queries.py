@@ -63,6 +63,10 @@ def get_user_by_id(user_id: int) -> Optional[Dict[str, Any]]:
     return _first(supabase.table("users").select("*").eq("user_id", user_id).limit(1).execute())
 
 
+def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
+    return _first(supabase.table("users").select("*").eq("email", email).limit(1).execute())
+
+
 # ==================== Audio Posts ====================
 
 def create_audio_post(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -100,6 +104,10 @@ def get_audio_post_by_id(post_id: int) -> Optional[Dict[str, Any]]:
         .limit(1)
     )
     return _first(query.execute())
+
+
+def list_user_history(user_id: int, page: int = 1, limit: int = 20) -> List[Dict[str, Any]]:
+    return list_audio_posts(page=page, limit=limit, user_id=user_id)
 
 
 def list_audio_posts(page: int = 1, limit: int = 20, visibility: Optional[str] = None, user_id: Optional[int] = None) -> List[Dict[str, Any]]:
@@ -261,6 +269,23 @@ def list_rag_chunks(post_id: int, page: int = 1, limit: int = 200) -> List[Dict[
         .select("*")
         .eq("post_id", post_id)
         .order("start_sec", desc=False)
+        .range(start, end)
+        .execute()
+    )
+    return _rows(response)
+
+
+def search_rag_chunks(user_id: int, query_text: str, page: int = 1, limit: int = 30) -> List[Dict[str, Any]]:
+    start, end = _paginate(page, limit)
+    response = (
+        supabase.table("rag_chunks")
+        .select(
+            "chunk_id, post_id, start_sec, end_sec, text, confidence, created_at, "
+            "audio_posts!inner(post_id, user_id, title, visibility, created_at)"
+        )
+        .eq("audio_posts.user_id", user_id)
+        .ilike("text", f"%{query_text}%")
+        .order("created_at", desc=True)
         .range(start, end)
         .execute()
     )
