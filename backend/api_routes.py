@@ -874,9 +874,14 @@ def api_delete_post(post_id: int):
         delete_rights(post_id)
         delete_audio_post(post_id)
 
-        # ❌ Skip audit log for now
+        add_audit_log({
+            "post_id": post_id,
+            "user_id": user_id,
+            "action": "post.deleted",
+            "details": json.dumps({"title": post.get("title")})
+        })
 
-        return jsonify({"message": "Post and all related data deleted successfully", "post_id": post_id})
+        return jsonify({"message": "Post deleted successfully", "post_id": post_id})
 
     except Exception as e:
         return _error(f"Failed to delete post: {str(e)}", 500)

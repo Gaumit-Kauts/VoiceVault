@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import AudioPostCard from '../components/AudioPostCard'
 import { api } from '../api'
 
-export default function Feed({ user }) {
+export default function Feed({ user, onViewPost}) {
   const [posts, setPosts] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -18,26 +18,26 @@ export default function Feed({ user }) {
   const fetchPosts = async () => {
     setLoading(true)
     setError(null)
-    
+
     try {
       const params = {
         page,
         limit: 20,
         current_user_id: user.user_id, // For backend privacy checks
       }
-      
+
       if (visibilityFilter !== 'all') {
         params.visibility = visibilityFilter
       }
 
       const response = await api.getPosts(params)
       let filteredPosts = response.posts || []
-      
+
       // Frontend privacy filter: only show posts if they're public OR user is the author
       filteredPosts = filteredPosts.filter(post => {
         return post.visibility === 'public' || post.user_id === user.user_id
       })
-      
+
       setPosts(filteredPosts)
     } catch (err) {
       setError(err.message)
@@ -119,7 +119,7 @@ export default function Feed({ user }) {
           <AudioPostCard
             key={post.post_id}
             post={post}
-            onPlay={handlePlay}
+            onViewPost={onViewPost} // pass down
           />
         ))
       ) : (

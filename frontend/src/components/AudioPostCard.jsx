@@ -153,7 +153,7 @@ export default function AudioPostCard({ post, onViewPost }) {
 
   const handleView = (postId) => {
     if (onViewPost) {
-      onViewPost(post.postId)
+      onViewPost(postId)
     }
   }
 
@@ -219,7 +219,7 @@ export default function AudioPostCard({ post, onViewPost }) {
             )}
             {post.status === 'ready' && (
               <button
-                onClick={handleView}
+                onClick={() => handleView(post.post_id)}
                 className="flex items-center gap-1 text-sm text-[#f4b840] hover:text-[#e5a930]"
               >
                 <span>View Post</span>
