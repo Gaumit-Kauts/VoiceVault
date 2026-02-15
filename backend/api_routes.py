@@ -11,6 +11,12 @@ from pathlib import Path
 import io
 import zipfile
 from flask import send_file
+from typing import Dict, Any
+import requests
+
+
+
+
 
 
 from dotenv import load_dotenv
@@ -610,35 +616,110 @@ def api_post_audit(post_id: int):
     except Exception as e:
         return _error(str(e), 500)
 
+
 @api.get("/posts/<int:post_id>/download")
 def download_post(post_id: int):
-    post = get_audio_post_by_id(post_id)
-    if not post:
-        return jsonify({"error": "Post not found"}), 404
+    """
+    Download post as a ZIP file containing:
+    - Original audio file
+    - Transcript as text
+    - Metadata as JSON
+    """
+    try:
+        # Get post data
+        post = get_audio_post_by_id(post_id)
+        if not post:
+            return _error("Post not found", 404)
 
-    files = list_archive_files(post_id)
-    metadata = get_archive_metadata(post_id) or {}
+        # Get files and metadata
+        files = list_archive_files(post_id)
+        metadata_row = get_archive_metadata(post_id)
 
-    zip_buffer = io.BytesIO()
-    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
-        if metadata.get("metadata"):
-            zipf.writestr("metadata.json", json.dumps(metadata, indent=2))
+        # Create ZIP in memory
+        zip_buffer = io.BytesIO()
 
-        for f in files:
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
+            # 1. Add metadata.json
+            if metadata_row and metadata_row.get("metadata"):
+                try:
+                    metadata_dict = json.loads(metadata_row["metadata"]) if isinstance(metadata_row["metadata"], str) else metadata_row["metadata"]
+
+                    # Extract clean transcript from prompt
+                    transcript_text = ""
+                    if "prompt" in metadata_dict:
+                        prompt = metadata_dict["prompt"]
+                        match = prompt.split("Transcript:\n")
+                        if len(match) > 1:
+                            transcript_text = match[1].split("\n\nAnswer user questions")[0].strip()
+
+                    # Create a clean metadata file
+                    clean_metadata = {
+                        "title": post.get("title"),
+                        "description": post.get("description"),
+                        "language": metadata_dict.get("language", "en"),
+                        "transcript_length": metadata_dict.get("transcript_length_chars"),
+                        "created_at": post.get("created_at"),
+                        "visibility": post.get("visibility"),
+                    }
+
+                    zipf.writestr("metadata.json", json.dumps(clean_metadata, indent=2))
+
+                    # Add transcript as separate file
+                    if transcript_text:
+                        zipf.writestr("transcript.txt", transcript_text)
+
+                except Exception as e:
+                    print(f"Error adding metadata: {e}")
+
+            # 2. Add original audio file
+            for file_info in files:
+                if file_info.get("role") == "original_audio":
+                    try:
+                        # Get signed URL for the audio
+                        audio_url_data = get_original_audio_url(post_id, expires_in=300)  # 5 min expiry
+                        signed_url = audio_url_data.get("signed_url")
+
+                        if signed_url:
+                            # Download the file from Supabase
+                            response = requests.get(signed_url, timeout=30)
+
+                            if response.status_code == 200:
+                                # Get original filename
+                                original_filename = file_info["path"].split("/")[-1]
+                                zipf.writestr(f"audio/{original_filename}", response.content)
+                            else:
+                                print(f"Failed to download audio: HTTP {response.status_code}")
+                    except Exception as e:
+                        print(f"Error adding audio file: {e}")
+
+            # 3. Add RAG chunks if available
             try:
-                signed_url = get_original_audio_url(post_id)["signed_url"] if f["role"] == "original_audio" else None
-                if signed_url:
-                    r = requests.get(signed_url)
-                    if r.status_code == 200:
-                        filename = f"{f['role']}_{f['path'].split('/')[-1]}"
-                        zipf.writestr(filename, r.content)
+                chunks = list_rag_chunks(post_id, page=1, limit=1000)
+                if chunks:
+                    chunks_text = "\n\n".join([
+                        f"[{chunk['start_sec']:.2f}s - {chunk['end_sec']:.2f}s]\n{chunk['text']}"
+                        for chunk in chunks
+                    ])
+                    zipf.writestr("transcript_timestamped.txt", chunks_text)
             except Exception as e:
-                print("Failed to add file:", e)
+                print(f"Error adding chunks: {e}")
 
-    zip_buffer.seek(0)
-    return send_file(
-        zip_buffer,
-        mimetype="application/zip",
-        as_attachment=True,
-        download_name=f"{post['title'].replace(' ', '_')}.zip"
-    )
+        # Move to beginning of buffer
+        zip_buffer.seek(0)
+
+        # Generate safe filename
+        safe_title = "".join(c for c in post.get("title", "archive") if c.isalnum() or c in (' ', '-', '_')).strip()
+        safe_title = safe_title.replace(' ', '_')[:50]  # Limit length
+
+        return send_file(
+            zip_buffer,
+            mimetype="application/zip",
+            as_attachment=True,
+            download_name=f"{safe_title}_{post_id}.zip"
+        )
+
+    except Exception as e:
+        print(f"Download error: {e}")
+        import traceback
+        traceback.print_exc()
+        return _error(f"Failed to create download: {str(e)}", 500)

@@ -206,9 +206,7 @@ export default function AudioPostCard({ post }) {
               )}
             </button>
           )}
-          <button className="text-gray-500 hover:text-gray-700">
-            <MoreVertical size={18} />
-          </button>
+
         </div>
 
 
