@@ -3,7 +3,7 @@
  * Handles all communication with Flask API
  */
 
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL= 'http://localhost:5000/api';
 
 class ApiClient {
   constructor() {
@@ -153,11 +153,24 @@ class ApiClient {
     return this.request(`/posts/${postId}/metadata`);
   }
 
+  // ==================== Export/Download ====================
+
   async exportPost(postId) {
-  const response = await fetch(`/api/posts/${postId}/download`, { method: "GET" });
-  if (!response.ok) throw new Error(`Failed to download post: ${response.statusText}`);
-  return await response.blob(); // returns proper Blob ready for download
-}
+    const response = await fetch(`${this.baseUrl}/posts/${postId}/download`, {
+      method: "GET",
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Failed to download post: ${response.statusText}`);
+    }
+
+    // Get binary data
+    const buffer = await response.arrayBuffer();
+
+    // Convert to a Blob so the browser can download it
+    return new Blob([buffer], { type: "application/zip" });
+  }
 
   // ==================== RAG Search ====================
 

@@ -1,4 +1,4 @@
-import { Play, Pause, Volume2, MoreVertical, Clock, ChevronDown, ChevronUp } from 'lucide-react'
+import { Play, Pause, Volume2, MoreVertical, Clock, ChevronDown, ChevronUp, Download } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 import { api } from '../api'
 
@@ -10,6 +10,7 @@ export default function AudioPostCard({ post }) {
   const [transcript, setTranscript] = useState(null)
   const [loadingTranscript, setLoadingTranscript] = useState(false)
   const [transcriptExpanded, setTranscriptExpanded] = useState(false)
+  const [downloading, setDownloading] = useState(false)
   const audioRef = useRef(null)
 
   // DEBUG: Log post data to console
@@ -73,6 +74,29 @@ export default function AudioPostCard({ post }) {
     }
   }
 
+  const handleDownload = async () => {
+    if (downloading) return
+
+    setDownloading(true)
+    try {
+      const zipBlob = await api.exportPost(post.post_id)
+
+      const url = window.URL.createObjectURL(zipBlob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `${post.title.replace(/[^a-zA-Z0-9]/g, "_")}_${post.post_id}.zip`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error("Failed to download post:", err)
+      alert(`Download failed: ${err.message}`)
+    } finally {
+      setDownloading(false)
+    }
+  }
+
   const togglePlay = () => {
     if (!audioRef.current) return
 
@@ -122,24 +146,6 @@ export default function AudioPostCard({ post }) {
     }
   }
 
-  const handleDownload = async () => {
-    try {
-      const zipBlob = await api.exportPost(post.post_id);
-
-      const url = window.URL.createObjectURL(zipBlob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${post.title.replace(/\s+/g, "_")}.zip`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error("Failed to download post:", err);
-    }
-  }
-
-
   const handleEnded = () => {
     setIsPlaying(false)
     setCurrentTime(0)
@@ -174,15 +180,26 @@ export default function AudioPostCard({ post }) {
               </span>
             </div>
           </div>
-          {post.status === "ready" && (
-  <button
-    onClick={handleDownload}
-    className="mt-2 px-3 py-1 bg-[#f4b840] text-black rounded hover:bg-[#e5a930] transition-colors"
-  >
-    Download Post
-  </button>
-)}
-
+          {post.status === 'ready' && (
+            <button
+              onClick={handleDownload}
+              disabled={downloading}
+              className="flex items-center gap-2 px-3 py-1.5 bg-[#f4b840] hover:bg-[#e5a930] text-[#1a1a1a] rounded text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Download post as ZIP"
+            >
+              {downloading ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#1a1a1a]"></div>
+                  <span>Downloading...</span>
+                </>
+              ) : (
+                <>
+                  <Download size={16} />
+                  <span>Download</span>
+                </>
+              )}
+            </button>
+          )}
           <button className="text-gray-500 hover:text-gray-700">
             <MoreVertical size={18} />
           </button>
