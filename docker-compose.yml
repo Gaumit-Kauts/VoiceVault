@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  # Backend Service
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: voicevault-backend
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      # Flask
+      FLASK_APP: main.py
+      FLASK_ENV: production
+
+      # Supabase - REPLACE THESE WITH YOUR ACTUAL VALUES
+      SUPABASE_URL: "https://tnpnlkosqqudoadfylss.supabase.co"
+      SUPABASE_SERVICE_ROLE_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRucG5sa29zcXF1ZG9hZGZ5bHNzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MTAyNTQwOCwiZXhwIjoyMDg2NjAxNDA4fQ.v1xblErJBBv8p001vvTCUBfjP8ZqskfXNETB_yJOgvc"
+      SUPABASE_BUCKET: "archives"
+
+      # Whisper AI Settings
+      WHISPER_MODEL: "base"
+      WHISPER_DEVICE: "cpu"
+      WHISPER_COMPUTE_TYPE: "int8"
+
+      # Backend Settings
+      BACKEND_UPLOAD_DIR: "/app/uploads"
+    volumes:
+      - uploads:/app/uploads
+    networks:
+      - voicevault-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Frontend Service
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: voicevault-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - voicevault-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  uploads:
+    driver: local
+
+networks:
+  voicevault-network:
+    driver: bridge
