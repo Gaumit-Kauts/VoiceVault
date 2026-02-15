@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react'
-import { FileText, Trash2, Eye } from 'lucide-react'
+import { FileText, Trash2, Eye, Edit2 } from 'lucide-react'
 import { api } from '../api'
+import EditPostModal from '../components/EditPostModal'
 
-export default function History({ user }) {
+export default function History({ user, onViewPost }) {
   const [posts, setPosts] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [page, setPage] = useState(1)
+  const [deleting, setDeleting] = useState(null)
+  const [editingPost, setEditingPost] = useState(null)
 
   useEffect(() => {
     if (user?.user_id) {
@@ -17,7 +20,7 @@ export default function History({ user }) {
   const fetchHistory = async () => {
     setLoading(true)
     setError(null)
-    
+
     try {
       const response = await api.getUserHistory(user.user_id, page, 20)
       setPosts(response.history || [])
@@ -29,27 +32,35 @@ export default function History({ user }) {
   }
 
   const handleDelete = async (postId) => {
-    if (!confirm('Are you sure you want to delete this post?')) {
+    if (!confirm('Are you sure you want to delete this post? This action cannot be undone.')) {
       return
     }
 
+    setDeleting(postId)
     try {
-      await api.deletePost(postId)
-      // Refresh the list
-      fetchHistory()
+      await api.deletePost(postId, user.user_id)
+      // Remove from local state immediately
+      setPosts(posts.filter(p => p.post_id !== postId))
     } catch (err) {
       alert('Failed to delete post: ' + err.message)
+    } finally {
+      setDeleting(null)
     }
   }
 
-  const handleView = async (postId) => {
-    try {
-      const bundle = await api.getPostBundle(postId)
-      console.log('Post bundle:', bundle)
-      // You could open a modal or navigate to a detail view
-    } catch (err) {
-      alert('Failed to load post details: ' + err.message)
+  const handleView = (postId) => {
+    if (onViewPost) {
+      onViewPost(postId)
     }
+  }
+
+  const handleEdit = (post) => {
+    setEditingPost(post)
+  }
+
+  const handleSaveEdit = () => {
+    // Refresh the list after edit
+    fetchHistory()
   }
 
   const formatDate = (dateString) => {
@@ -102,26 +113,31 @@ export default function History({ user }) {
           <FileText size={20} />
           My Posted Archives
         </h3>
-        
+
         {posts.length > 0 ? (
           <div className="space-y-3">
             {posts.map((post) => (
-              <div key={post.post_id} className="flex items-start gap-4 p-4 hover:bg-gray-50 rounded-lg border border-gray-200 transition-colors">
+              <div
+                key={post.post_id}
+                className={`flex items-start gap-4 p-4 hover:bg-gray-50 rounded-lg border border-gray-200 transition-colors ${
+                  deleting === post.post_id ? 'opacity-50 pointer-events-none' : ''
+                }`}
+              >
                 <div className="flex-1 min-w-0">
                   <h4 className="font-semibold text-gray-900 mb-1">{post.title}</h4>
-                  
+
                   {post.description && (
                     <p className="text-sm text-gray-600 mb-2 line-clamp-2">
                       {post.description}
                     </p>
                   )}
-                  
+
                   <div className="flex items-center gap-3 text-sm text-gray-600 mb-2">
                     <span>{formatDate(post.created_at)}</span>
                     <span>•</span>
                     <span className={`px-2 py-0.5 rounded text-xs ${
-                      post.visibility === 'public' 
-                        ? 'bg-green-100 text-green-700' 
+                      post.visibility === 'public'
+                        ? 'bg-green-100 text-green-700'
                         : 'bg-gray-100 text-gray-700'
                     }`}>
                       {post.visibility}
@@ -144,19 +160,33 @@ export default function History({ user }) {
                 </div>
 
                 <div className="flex gap-2 flex-shrink-0">
+                  {post.status === 'ready' && (
+                    <button
+                      onClick={() => handleView(post.post_id)}
+                      className="p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                      title="View full post"
+                    >
+                      <Eye size={18} />
+                    </button>
+                  )}
                   <button
-                    onClick={() => handleView(post.post_id)}
-                    className="p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                    title="View details"
+                    onClick={() => handleEdit(post)}
+                    className="p-2 text-green-600 hover:bg-green-50 rounded transition-colors"
+                    title="Edit post"
                   >
-                    <Eye size={18} />
+                    <Edit2 size={18} />
                   </button>
-                  <button 
+                  <button
                     onClick={() => handleDelete(post.post_id)}
-                    className="p-2 text-red-500 hover:bg-red-50 rounded transition-colors"
+                    disabled={deleting === post.post_id}
+                    className="p-2 text-red-500 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
                     title="Delete post"
                   >
-                    <Trash2 size={18} />
+                    {deleting === post.post_id ? (
+                      <div className="animate-spin rounded-full h-[18px] w-[18px] border-b-2 border-red-500"></div>
+                    ) : (
+                      <Trash2 size={18} />
+                    )}
                   </button>
                 </div>
               </div>
@@ -170,7 +200,7 @@ export default function History({ user }) {
       </div>
 
       {/* Summary Stats */}
-      {posts.length > 0 && (
+      {/* {posts.length > 0 && (
         <div className="grid grid-cols-3 gap-4">
           <div className="bg-white rounded-lg border border-gray-200 p-4 text-center">
             <div className="text-2xl font-bold text-gray-900">{posts.length}</div>
@@ -189,7 +219,7 @@ export default function History({ user }) {
             <div className="text-sm text-gray-600">Public</div>
           </div>
         </div>
-      )}
+      )} */}
 
       {/* Pagination */}
       {posts.length >= 20 && (
@@ -209,6 +239,16 @@ export default function History({ user }) {
             Next
           </button>
         </div>
+      )}
+
+      {/* Edit Modal */}
+      {editingPost && (
+        <EditPostModal
+          post={editingPost}
+          user={user}
+          onClose={() => setEditingPost(null)}
+          onSave={handleSaveEdit}
+        />
       )}
     </div>
   )

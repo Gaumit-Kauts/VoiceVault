@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Search as SearchIcon, Sparkles, Clock, ExternalLink } from 'lucide-react'
 import { api } from '../api'
 
-export default function Search({ user, initialQuery = '' }) {
+export default function Search({ user, initialQuery = '', onViewPost}) {
   const [query, setQuery] = useState(initialQuery)
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(false)
@@ -46,6 +46,12 @@ export default function Search({ user, initialQuery = '' }) {
   const handleSearch = async (e) => {
     e.preventDefault()
     performSearch(query)
+  }
+
+  const handleView = (postId) => {
+    if (onViewPost) {
+      onViewPost(postId)
+    }
   }
 
   const formatTime = (seconds) => {
@@ -173,13 +179,13 @@ export default function Search({ user, initialQuery = '' }) {
                         )}
                       </div>
                     </div>
-                    <a
-                      href={`#post-${result.post_id}`}
+                    <button
+                      onClick={() => onViewPost && onViewPost(result.post_id)}
                       className="flex items-center gap-1 text-sm text-[#f4b840] hover:text-[#e5a930]"
                     >
                       <span>View Post</span>
                       <ExternalLink size={14} />
-                    </a>
+                    </button>
                   </div>
 
                   {/* Transcript Text with Highlighting */}

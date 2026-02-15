@@ -3,7 +3,7 @@
  * Handles all communication with Flask API
  */
 
-const API_BASE_URL= 'http://localhost:5000/api';
+const API_BASE_URL = 'http://localhost:5000/api';
 
 class ApiClient {
   constructor() {
@@ -128,9 +128,20 @@ class ApiClient {
     });
   }
 
-  async deletePost(postId) {
-    // Update status to mark as deleted
-    return this.updatePost(postId, { status: 'deleted' });
+  async deletePost(postId, userId) {
+    // Proper DELETE request with user authorization
+    return this.request(`/posts/${postId}?user_id=${userId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async editPost(postId, updates) {
+    // Updates can include: title, description, visibility
+    // Must include user_id for authorization
+    return this.request(`/posts/${postId}/edit`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    });
   }
 
   async getPostMetadata(postId) {

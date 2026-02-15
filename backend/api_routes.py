@@ -13,12 +13,6 @@ import zipfile
 from flask import send_file
 from typing import Dict, Any
 import requests
-
-
-
-
-
-
 from dotenv import load_dotenv
 from faster_whisper import WhisperModel
 from flask import Blueprint, jsonify, request
@@ -48,6 +42,9 @@ from db_queries import (
     upload_storage_object,
     upsert_archive_metadata,
     upsert_archive_rights,
+    delete_rag_chunks, delete_archive_files, delete_metadata,
+    delete_rights, delete_audio_post, update_audio_post,
+    get_audio_post_by_id
 )
 
 load_dotenv()
@@ -723,3 +720,205 @@ def download_post(post_id: int):
         import traceback
         traceback.print_exc()
         return _error(f"Failed to create download: {str(e)}", 500)
+
+
+# @api.delete("/posts/<int:post_id>")
+# def api_delete_post(post_id: int):
+#     """
+#     Permanently delete a post and all associated data.
+#     Only the post owner can delete their posts.
+#     """
+#     user_id = request.args.get("user_id", type=int)
+#
+#     if not user_id:
+#         return _error("'user_id' is required for authorization.", 400)
+#
+#     # Get the post
+#     post = get_audio_post_by_id(post_id)
+#     if not post:
+#         return _error("Post not found.", 404)
+#
+#     # Check ownership
+#     if post.get("user_id") != user_id:
+#         return _error("You don't have permission to delete this post.", 403)
+#
+#     try:
+#         # Delete associated data in order
+#         # 1. Delete RAG chunks
+#         supabase.table("rag_chunks").delete().eq("post_id", post_id).execute()
+#
+#         # 2. Delete archive files (and from storage if needed)
+#         files = list_archive_files(post_id)
+#         for file_info in files:
+#             # Optionally delete from Supabase storage
+#             try:
+#                 bucket, object_path = _parse_bucket_path(file_info["path"])
+#                 supabase.storage.from_(bucket).remove([object_path])
+#             except:
+#                 pass  # Continue even if storage delete fails
+#
+#         supabase.table("archive_files").delete().eq("post_id", post_id).execute()
+#
+#         # 3. Delete metadata
+#         supabase.table("archive_metadata").delete().eq("post_id", post_id).execute()
+#
+#         # 4. Delete rights
+#         supabase.table("archive_rights").delete().eq("post_id", post_id).execute()
+#
+#         # 5. Delete the post itself
+#         supabase.table("audio_posts").delete().eq("post_id", post_id).execute()
+#
+#         # Log the deletion
+#         add_audit_log({
+#             "post_id": post_id,
+#             "user_id": user_id,
+#             "action": "post.deleted",
+#             "details": json.dumps({"title": post.get("title")})
+#         })
+#
+#         return jsonify({"message": "Post deleted successfully", "post_id": post_id})
+#
+#     except Exception as e:
+#         return _error(f"Failed to delete post: {str(e)}", 500)
+#
+#
+# # ==================== UPDATE POST (Edit) ====================
+#
+# @api.put("/posts/<int:post_id>/edit")
+# def api_edit_post(post_id: int):
+#     """
+#     Update post title, description, and visibility.
+#     Only the post owner can edit their posts.
+#     """
+#     payload = request.get_json(force=True, silent=False) or {}
+#     user_id = payload.get("user_id")
+#
+#     if not user_id:
+#         return _error("'user_id' is required for authorization.", 400)
+#
+#     # Get the post
+#     post = get_audio_post_by_id(post_id)
+#     if not post:
+#         return _error("Post not found.", 404)
+#
+#     # Check ownership
+#     if post.get("user_id") != user_id:
+#         return _error("You don't have permission to edit this post.", 403)
+#
+#     # Prepare updates
+#     updates = {}
+#
+#     if "title" in payload:
+#         title = (payload["title"] or "").strip()
+#         if not title:
+#             return _error("Title cannot be empty.", 400)
+#         updates["title"] = title
+#
+#     if "description" in payload:
+#         updates["description"] = payload["description"]
+#
+#     if "visibility" in payload:
+#         visibility = (payload["visibility"] or "").strip().lower()
+#         if visibility not in {"private", "public"}:
+#             return _error("'visibility' must be 'private' or 'public'.", 400)
+#         updates["visibility"] = visibility
+#
+#     if not updates:
+#         return _error("No valid fields to update.", 400)
+#
+#     try:
+#         updated_post = update_audio_post(post_id, updates)
+#
+#         # Log the edit
+#         add_audit_log({
+#             "post_id": post_id,
+#             "user_id": user_id,
+#             "action": "post.edited",
+#             "details": json.dumps({"changes": list(updates.keys())})
+#         })
+#
+#         return jsonify(updated_post)
+#
+#     except Exception as e:
+#         return _error(f"Failed to update post: {str(e)}", 500)
+#
+#
+# # ==================== Helper function for _parse_bucket_path ====================
+#
+# def _parse_bucket_path(stored_path: str) -> tuple:
+#     """
+#     Parse stored path like 'archives/user/uuid/file.mp4'
+#     Returns: ('archives', 'user/uuid/file.mp4')
+#     """
+#     parts = (stored_path or "").split("/", 1)
+#     if len(parts) != 2:
+#         raise ValueError(f"Invalid storage path: {stored_path}")
+#     return parts[0], parts[1]
+
+@api.delete("/posts/<int:post_id>")
+def api_delete_post(post_id: int):
+    user_id = request.args.get("user_id", type=int)
+    if not user_id:
+        return _error("'user_id' is required for authorization.", 400)
+
+    post = get_audio_post_by_id(post_id)
+    if not post:
+        return _error("Post not found.", 404)
+    if post.get("user_id") != user_id:
+        return _error("You don't have permission to delete this post.", 403)
+
+    try:
+        delete_rag_chunks(post_id)
+        delete_archive_files(post_id)
+        delete_metadata(post_id)
+        delete_rights(post_id)
+        delete_audio_post(post_id)
+
+        # ❌ Skip audit log for now
+
+        return jsonify({"message": "Post and all related data deleted successfully", "post_id": post_id})
+
+    except Exception as e:
+        return _error(f"Failed to delete post: {str(e)}", 500)
+
+
+@api.put("/posts/<int:post_id>/edit")
+def api_edit_post(post_id: int):
+    payload = request.get_json(force=True) or {}
+    user_id = payload.get("user_id")
+    if not user_id:
+        return _error("'user_id' is required for authorization.", 400)
+
+    post = get_audio_post_by_id(post_id)
+    if not post:
+        return _error("Post not found.", 404)
+    if post.get("user_id") != user_id:
+        return _error("You don't have permission to edit this post.", 403)
+
+    updates = {}
+    if "title" in payload:
+        title = (payload["title"] or "").strip()
+        if not title:
+            return _error("Title cannot be empty.", 400)
+        updates["title"] = title
+    if "description" in payload:
+        updates["description"] = payload["description"]
+    if "visibility" in payload:
+        visibility = (payload["visibility"] or "").strip().lower()
+        if visibility not in {"private", "public"}:
+            return _error("'visibility' must be 'private' or 'public'.", 400)
+        updates["visibility"] = visibility
+    if not updates:
+        return _error("No valid fields to update.", 400)
+
+    try:
+        updated_post = update_audio_post(post_id, updates)
+        add_audit_log({
+            "post_id": post_id,
+            "user_id": user_id,
+            "action": "post.edited",
+            "details": json.dumps({"changes": list(updates.keys())})
+        })
+        return jsonify(updated_post)
+    except Exception as e:
+        return _error(f"Failed to update post: {str(e)}", 500)

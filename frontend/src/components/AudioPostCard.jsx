@@ -1,8 +1,8 @@
-import { Play, Pause, Volume2, MoreVertical, Clock, ChevronDown, ChevronUp, Download } from 'lucide-react'
+import { Play, Pause, Volume2, Clock, ChevronDown, ChevronUp, Download, ExternalLink } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 import { api } from '../api'
 
-export default function AudioPostCard({ post }) {
+export default function AudioPostCard({ post, onViewPost }) {
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
@@ -151,6 +151,13 @@ export default function AudioPostCard({ post }) {
     setCurrentTime(0)
   }
 
+  const handleView = (postId) => {
+    if (onViewPost) {
+      onViewPost(post.postId)
+    }
+  }
+
+
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0
 
   return (
@@ -178,38 +185,50 @@ export default function AudioPostCard({ post }) {
               }`}>
                 {post.status}
               </span>
-                <span>•</span>
+              <span>•</span>
               {post.language && (
-                  <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded">
-                    {post.language.toUpperCase()}
-                  </span>
-                )}
+                <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded">
+                  {post.language.toUpperCase()}
+                </span>
+              )}
             </div>
           </div>
-          {post.status === 'ready' && (
-            <button
-              onClick={handleDownload}
-              disabled={downloading}
-              className="flex items-center gap-2 px-3 py-1.5 bg-[#f4b840] hover:bg-[#e5a930] text-[#1a1a1a] rounded text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              title="Download post as ZIP"
-            >
-              {downloading ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#1a1a1a]"></div>
-                  <span>Downloading...</span>
-                </>
-              ) : (
-                <>
-                  <Download size={16} />
-                  <span>Download</span>
-                </>
-              )}
-            </button>
-          )}
 
+          {/* Action Buttons */}
+          <div className="flex items-center gap-2">
+
+            {post.status === 'ready' && (
+              <button
+                onClick={handleDownload}
+                disabled={downloading}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#f4b840] hover:bg-[#e5a930] text-[#1a1a1a] rounded text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Download post as ZIP"
+              >
+                {downloading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#1a1a1a]"></div>
+                    <span>Downloading...</span>
+                  </>
+                ) : (
+                  <>
+                    <Download size={16} />
+                    <span>Download</span>
+                  </>
+                )}
+              </button>
+            )}
+            {post.status === 'ready' && (
+              <button
+                onClick={handleView}
+                className="flex items-center gap-1 text-sm text-[#f4b840] hover:text-[#e5a930]"
+              >
+                <span>View Post</span>
+                <ExternalLink size={14} />
+              </button>
+
+            )}
+          </div>
         </div>
-
-
 
         {/* Description */}
         {post.description && (
@@ -217,7 +236,6 @@ export default function AudioPostCard({ post }) {
             {post.description}
           </p>
         )}
-
 
         {/* Audio Player - Only show if ready */}
         {post.status === 'ready' && (

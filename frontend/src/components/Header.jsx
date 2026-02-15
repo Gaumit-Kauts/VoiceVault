@@ -32,7 +32,7 @@ export default function Header({ onSearch, onLogout, onNavigateToSearch }) {
         </div>
 
         {/* Center: Search Bar */}
-        <form onSubmit={handleSearch} className="flex-1 max-w-2xl">
+        {/* <form onSubmit={handleSearch} className="flex-1 max-w-2xl">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
             <input
@@ -44,7 +44,7 @@ export default function Header({ onSearch, onLogout, onNavigateToSearch }) {
               className="w-full bg-gray-50 border border-gray-300 rounded-lg pl-10 pr-4 py-2 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#f4b840] focus:border-transparent"
             />
           </div>
-        </form>
+        </form> */}
 
         {/* Right: Logout */}
         <div className="flex items-center gap-3 flex-shrink-0">

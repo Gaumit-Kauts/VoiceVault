@@ -458,3 +458,34 @@ def get_post_bundle(post_id: int) -> Dict[str, Any]:
         "rag_chunks": list_rag_chunks(post_id, page=1, limit=1000),
         "audit_log": list_audit_logs(post_id=post_id, page=1, limit=200),
     }
+
+
+def delete_rag_chunks(post_id: int):
+    supabase.table("rag_chunks").delete().eq("post_id", post_id).execute()
+
+def delete_archive_files(post_id: int):
+    files = list_archive_files(post_id)
+    for file_info in files:
+        try:
+            bucket, object_path = _parse_bucket_path(file_info["path"])
+            supabase.storage.from_(bucket).remove([object_path])
+        except:
+            pass
+    supabase.table("archive_files").delete().eq("post_id", post_id).execute()
+
+def delete_metadata(post_id: int):
+    supabase.table("archive_metadata").delete().eq("post_id", post_id).execute()
+
+def delete_rights(post_id: int):
+    supabase.table("archive_rights").delete().eq("post_id", post_id).execute()
+
+def delete_audio_post(post_id: int):
+    supabase.table("audio_posts").delete().eq("post_id", post_id).execute()
+
+def update_audio_post(post_id: int, updates: dict):
+    supabase.table("audio_posts").update(updates).eq("post_id", post_id).execute()
+    return get_audio_post_by_id(post_id)
+
+def get_audio_post_by_id(post_id: int):
+    result = supabase.table("audio_posts").select("*").eq("post_id", post_id).single().execute()
+    return result.data if result.data else None

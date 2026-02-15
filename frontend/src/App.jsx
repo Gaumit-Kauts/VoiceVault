@@ -6,6 +6,7 @@ import CreatePost from './pages/CreatePost'
 import History from './pages/History'
 import Settings from './pages/Settings'
 import Search from './pages/Search'
+import PostDetail from './pages/PostDetail'
 import { api } from './api'
 
 export default function App() {
@@ -18,6 +19,7 @@ export default function App() {
   const [loginError, setLoginError] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [headerSearchQuery, setHeaderSearchQuery] = useState('')
+  const [viewingPostId, setViewingPostId] = useState(null)
 
   // Check for saved user on mount
   useEffect(() => {
@@ -78,6 +80,15 @@ export default function App() {
   const handleNavigateToSearch = (query) => {
     setActiveTab('search')
     setHeaderSearchQuery(query)
+    setViewingPostId(null) // Clear any post detail view
+  }
+
+  const handleViewPost = (postId) => {
+    setViewingPostId(postId)
+  }
+
+  const handleBackFromPost = () => {
+    setViewingPostId(null)
   }
 
   const handlePostCreated = () => {
@@ -94,17 +105,22 @@ export default function App() {
   const renderPage = () => {
     if (!user) return null
 
+    // If viewing a specific post, show PostDetail
+    if (viewingPostId) {
+      return <PostDetail postId={viewingPostId} user={user} onBack={handleBackFromPost} />
+    }
+
     switch (activeTab) {
       case 'create':
         return <CreatePost user={user} onPostCreated={handlePostCreated} />
       case 'search':
-        return <Search user={user} initialQuery={headerSearchQuery} />
+        return <Search user={user} initialQuery={headerSearchQuery} onViewPost={handleViewPost} />
       case 'history':
-        return <History user={user} />
+        return <History user={user} onViewPost={handleViewPost} />
       case 'settings':
         return <Settings user={user} onUpdate={handleUserUpdate} />
       default:
-        return <Feed user={user} />
+        return <Feed user={user} onViewPost={handleViewPost} />
     }
   }
 
