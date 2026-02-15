@@ -1,49 +1,83 @@
-﻿
-## Backend (Audio -> Whisper -> Supabase)
+﻿# VoiceVault 
 
-This backend:
-1. accepts an audio file,
-2. transcribes it with OpenAI Whisper (`whisper-1`),
-3. stores transcript text in Supabase `posts.transcribed_text`,
-4. links categories in `post_categories`.
+Schema-driven archival audio backend + frontend.
 
-## Install
-```bash
-pip install -r requirements.txt
-```
+## What It Does
 
-## Environment variables
-- `OPENAI_API_KEY`
+- Register / login users
+- Upload original audio/video to Supabase Storage bucket (`archives`)
+- Create `audio_posts` records in Postgres
+- Transcribe media locally with `faster-whisper`
+- Save transcript chunks to `rag_chunks` (with embeddings)
+- Build prompt context and store in `archive_metadata`
+- Search user chunks with RAG endpoint (vector mode or text fallback)
+
+## Project Structure
+
+- `backend/main.py` Flask app entry
+- `backend/api_routes.py` API routes and upload/transcription flow
+- `backend/db_queries.py` Supabase DB/storage helpers
+- `schema.sql` database schema
+- `frontend/` React app
+
+## Environment (`backend/.env`)
+
+Required:
 - `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY` (use service-role key on backend only)
-- `UPLOAD_DIR` (default: `uploads`)
-- `PORT` (default: `5000`)
+- `SUPABASE_SERVICE_ROLE_KEY` (service role key, not publishable key)
+- `SUPABASE_BUCKET=archives`
 
-## Run
+Optional:
+- `BACKEND_UPLOAD_DIR=uploads`
+- `WHISPER_MODEL=base`
+- `WHISPER_DEVICE=cpu`
+- `WHISPER_COMPUTE_TYPE=int8`
+
+## Run Backend
+
 ```bash
-python speech_to_text.py
+cd backend
+python main.py
 ```
 
-## Endpoints
-- `GET /health`
-- `GET /health/db`
-- `POST /upload-audio`
+Backend runs on `http://localhost:5000`.
 
-## Upload example
+## Run Frontend
+
 ```bash
-curl -X POST http://localhost:5000/upload-audio \
-  -F "file=@sample.mp3" \
-  -F "user_id=1" \
-  -F "title=My oral history" \
-  -F "category_ids=1,4" \
-  -F "is_private=false"
+cd frontend
+npm install
+npm run dev
 ```
 
-## Required tables in Supabase
-Your Supabase Postgres project should already contain:
-- `users`
-- `posts`
-- `post_categories`
-- `categories`
+Set frontend API base to `http://127.0.0.1:5000/api` (or your backend host).
 
-Note: `user_id` must exist in `users` before upload.
+## Core API Endpoints
+
+Auth:
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+
+Upload + processing:
+- `POST /api/posts/upload` (multipart form-data: `file`, `user_id`, `title`, `visibility`, optional metadata)
+
+History + RAG:
+- `GET /api/users/<user_id>/history`
+- `GET /api/rag/search?user_id=<id>&q=<text>`
+- `GET /api/rag/search?user_id=<id>&query_embedding=[...]`
+
+Playback:
+- `GET /api/posts/<post_id>/audio-url?user_id=<id>` (required for private posts)
+
+Post data:
+- `GET /api/posts`
+- `GET /api/posts/<post_id>`
+- `GET /api/posts/<post_id>/bundle`
+- `GET /api/posts/<post_id>/files`
+- `GET /api/posts/<post_id>/chunks`
+
+## Notes
+
+- Original media is stored in Supabase Storage; DB stores the object path in `archive_files` (`role=original_audio`).
+- Transcript text/chunks/metadata/audit remain in Postgres tables.
+- If storage upload fails with RLS errors, verify service-role key and bucket policies.
