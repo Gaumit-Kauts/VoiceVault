@@ -379,6 +379,13 @@ def list_rag_chunks(post_id: int, page: int = 1, limit: int = 200) -> List[Dict[
     return _rows(response)
 
 
+def _can_access_post(row: Dict[str, Any], requester_user_id: int) -> bool:
+    post = row.get("audio_posts") or {}
+    visibility = post.get("visibility")
+    owner_id = post.get("user_id")
+    return visibility == "public" or owner_id == requester_user_id
+
+
 def search_rag_chunks(user_id: int, query_text: str, page: int = 1, limit: int = 30) -> List[Dict[str, Any]]:
     start, end = _paginate(page, limit)
     response = (
@@ -387,13 +394,13 @@ def search_rag_chunks(user_id: int, query_text: str, page: int = 1, limit: int =
             "chunk_id, post_id, start_sec, end_sec, text, confidence, created_at, "
             "audio_posts!inner(post_id, user_id, title, visibility, created_at)"
         )
-        .eq("audio_posts.user_id", user_id)
         .ilike("text", f"%{query_text}%")
         .order("created_at", desc=True)
-        .range(start, end)
+        .range(0, min(2000, end + 500))
         .execute()
     )
-    return _rows(response)
+    rows = [r for r in _rows(response) if _can_access_post(r, user_id)]
+    return rows[start:end + 1]
 
 
 def search_rag_chunks_vector(user_id: int, query_embedding: List[float], limit: int = 30) -> List[Dict[str, Any]]:
@@ -412,9 +419,9 @@ def search_rag_chunks_vector(user_id: int, query_embedding: List[float], limit: 
                 "p_match_count": safe_limit,
             },
         ).execute()
-        rows = _rows(response)
+        rows = [r for r in _rows(response) if _can_access_post(r, user_id)]
         if rows:
-            return rows
+            return rows[:safe_limit]
     except Exception:
         pass
 
@@ -430,6 +437,9 @@ def search_rag_chunks_vector(user_id: int, query_embedding: List[float], limit: 
         .execute()
     )
     candidates = _rows(response)
+    if not candidates:
+        return []
+    candidates = [r for r in candidates if _can_access_post(r, user_id)]
     if not candidates:
         return []
 
