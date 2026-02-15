@@ -96,6 +96,16 @@ def _build_prompt(transcript_text: str, title: str) -> str:
         f"{transcript_text}\n\n"
         "Answer user questions grounded in this transcript."
     )
+def _add_audio_url(post: Dict[str, Any]) -> Dict[str, Any]:
+    """Add signed audio URL to post if ready"""
+    if post.get("status") == "ready":
+        try:
+            audio_data = get_original_audio_url(post["post_id"], expires_in=3600)
+            post["audio_url"] = audio_data["signed_url"]
+        except:
+            pass
+    return post
+
 
 
 @api.get("/health")
@@ -397,18 +407,30 @@ def api_create_post():
         return _error(str(e), 500)
 
 
+
 @api.get("/posts")
 def api_list_posts():
     page = request.args.get("page", default=1, type=int)
     limit = request.args.get("limit", default=20, type=int)
     visibility = request.args.get("visibility")
-    user_id = request.args.get("user_id", type=int)
-
+    current_user_id = request.args.get("current_user_id", type=int)  # NEW LINE
+    
     try:
-        rows = list_audio_posts(page=page, limit=limit, visibility=visibility, user_id=user_id)
+        rows = list_audio_posts(page=page, limit=limit, visibility=visibility)
+        
+        # NEW: Filter private posts
+        if current_user_id:
+            rows = [p for p in rows if p.get('visibility') == 'public' or p.get('user_id') == current_user_id]
+        else:
+            rows = [p for p in rows if p.get('visibility') == 'public']
+        
+        # NEW: Add audio URLs - CHANGE THIS LINE ONLY
+        rows = [_add_audio_url(post) for post in rows]
+        
         return jsonify({"posts": rows, "page": page, "limit": min(max(1, limit), 100)})
     except Exception as e:
         return _error(str(e), 500)
+
 
 
 @api.get("/posts/<int:post_id>")
@@ -583,20 +605,3 @@ def api_post_audit(post_id: int):
         return jsonify({"logs": list_audit_logs(post_id=post_id, page=page, limit=limit)})
     except Exception as e:
         return _error(str(e), 500)
-
-@api.get("/posts/<int:post_id>/audio")
-def api_get_audio_url(post_id: int):
-    """
-    Get a signed URL for the original audio file.
-    """
-    expires_in = request.args.get("expires_in", default=3600, type=int)
-    
-    try:
-        audio_data = get_original_audio_url(post_id, expires_in=expires_in)
-        return jsonify(audio_data)
-    except ValueError as e:
-        return _error(str(e), 404)
-    except RuntimeError as e:
-        return _error(str(e), 500)
-    except Exception as e:
-        return _error(f"Failed to get audio URL: {e}", 500)

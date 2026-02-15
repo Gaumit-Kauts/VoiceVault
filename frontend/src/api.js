@@ -137,6 +137,10 @@ class ApiClient {
     return this.request(`/posts/${postId}/metadata`);
   }
 
+  async getAudioUrl(postId, expiresIn = 3600) {
+    return this.request(`/posts/${postId}/audio?expires_in=${expiresIn}`);
+  }
+
   // ==================== Post Files ====================
 
   async getPostFiles(postId) {

@@ -12,6 +12,13 @@ export default function AudioPostCard({ post }) {
   const [transcriptExpanded, setTranscriptExpanded] = useState(false)
   const audioRef = useRef(null)
 
+  // DEBUG: Log post data to console
+  useEffect(() => {
+    console.log('Post data:', post)
+    console.log('Audio URL:', post.audio_url)
+    console.log('Status:', post.status)
+  }, [post])
+
   const formatDate = (dateString) => {
     const date = new Date(dateString)
     const now = new Date()
@@ -35,7 +42,14 @@ export default function AudioPostCard({ post }) {
     if (post.status === 'ready' && !transcript && !loadingTranscript) {
       loadTranscript()
     }
-  }, [post.post_id, post.status])
+    
+    // Set audio source if available
+    if (post.audio_url && audioRef.current) {
+      console.log('Setting audio src to:', post.audio_url)
+      audioRef.current.src = post.audio_url
+      audioRef.current.load() // Force reload
+    }
+  }, [post.post_id, post.status, post.audio_url])
 
   const loadTranscript = async () => {
     setLoadingTranscript(true)
@@ -78,8 +92,14 @@ export default function AudioPostCard({ post }) {
 
   const handleLoadedMetadata = () => {
     if (audioRef.current) {
+      console.log('Audio metadata loaded, duration:', audioRef.current.duration)
       setDuration(audioRef.current.duration)
     }
+  }
+
+  const handleAudioError = (e) => {
+    console.error('Audio error:', e)
+    console.error('Audio element error:', audioRef.current?.error)
   }
 
   const handleSeek = (e) => {
@@ -155,11 +175,13 @@ export default function AudioPostCard({ post }) {
               {/* Hidden audio element */}
               <audio
                 ref={audioRef}
-                src={post.audio_path}
                 onTimeUpdate={handleTimeUpdate}
                 onLoadedMetadata={handleLoadedMetadata}
                 onEnded={handleEnded}
+                onError={handleAudioError}
+                onCanPlay={() => console.log('Audio can play')}
                 preload="metadata"
+                crossOrigin="anonymous"
               />
 
               <div className="flex items-center gap-4">
