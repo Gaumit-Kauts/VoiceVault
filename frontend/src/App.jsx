@@ -71,7 +71,6 @@ export default function App() {
       try {
         const results = await api.searchRAG(query, user.user_id)
         console.log('Search results:', results)
-        // You could display these results in a modal or separate view
       } catch (err) {
         console.error('Search error:', err)
       }
@@ -81,7 +80,7 @@ export default function App() {
   const handleNavigateToSearch = (query) => {
     setActiveTab('search')
     setHeaderSearchQuery(query)
-    setViewingPostId(null) // Clear any post detail view
+    setViewingPostId(null)
   }
 
   const handleViewPost = (postId) => {
@@ -98,7 +97,6 @@ export default function App() {
   }
 
   const handlePostCreated = () => {
-    // Switch to feed after creating a post
     setActiveTab('feed')
     setViewingPostId(null)
   }
@@ -112,7 +110,6 @@ export default function App() {
   const renderPage = () => {
     if (!user) return null
 
-    // If viewing a specific post, show PostDetail
     if (viewingPostId) {
       return <PostDetail postId={viewingPostId} user={user} onBack={handleBackFromPost} />
     }
@@ -131,76 +128,149 @@ export default function App() {
     }
   }
 
-  // Login/Register Screen
+  // Minimal Elegant Login/Register Screen
   if (showLogin) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
-          <div className="text-center mb-8">
-            <div className="w-16 h-16 bg-[#f4b840] rounded-lg flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-              </svg>
+      <div className="min-h-screen bg-white flex">
+        {/* Left Side - Minimal Landing */}
+        <div className="hidden lg:flex lg:w-1/2 p-16 flex-col justify-center border-r border-gray-100">
+          <div className="max-w-lg">
+            {/* Logo */}
+            <div className="mb-16">
+              <img
+                src="/Logo.png"
+                alt="VoiceVault"
+                className="h-20 w-auto mb-6"
+                onError={(e) => {
+                  e.target.style.display = 'none'
+                  e.target.nextElementSibling.style.display = 'block'
+                }}
+              />
+              <div style={{display: 'none'}} className="mb-6">
+                <span className="text-4xl font-light text-gray-900">VoiceVault</span>
+              </div>
             </div>
-            <h1 className="text-2xl font-bold text-gray-900">VoiceVault</h1>
-            <p className="text-gray-600 mt-2">Archive your audio memories</p>
+
+            {/* Headline */}
+            <h1 className="text-5xl font-light text-gray-900 mb-6 leading-tight">
+              Archive your
+              <br />
+              audio memories
+            </h1>
+
+            <p className="text-lg text-gray-600 mb-12 leading-relaxed font-light">
+              Preserve, transcribe, and search through your voice recordings
+              with intelligent AI-powered archiving.
+            </p>
+
+            {/* Simple Features List */}
+            <div className="space-y-4 text-gray-700">
+              <div className="flex items-center gap-3">
+                <div className="w-1 h-1 bg-gray-400 rounded-full"></div>
+                <span className="font-light">Automatic transcription</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="w-1 h-1 bg-gray-400 rounded-full"></div>
+                <span className="font-light">Intelligent search</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="w-1 h-1 bg-gray-400 rounded-full"></div>
+                <span className="font-light">Secure storage</span>
+              </div>
+            </div>
           </div>
+        </div>
 
-          {loginError && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-800">
-              {loginError}
-            </div>
-          )}
-
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-900 mb-2">
-                Email
-              </label>
-              <input
-                type="email"
-                value={loginEmail}
-                onChange={(e) => setLoginEmail(e.target.value)}
-                placeholder="your@email.com"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#f4b840] focus:border-transparent"
-                required
+        {/* Right Side - Minimal Form */}
+        <div className="w-full lg:w-1/2 flex items-center justify-center p-8">
+          <div className="w-full max-w-sm">
+            {/* Mobile Logo */}
+            <div className="lg:hidden mb-12 text-center">
+              <img
+                src="/Logo.png"
+                alt="VoiceVault"
+                className="h-16 w-auto mx-auto mb-4"
+                onError={(e) => {
+                  e.target.style.display = 'none'
+                  e.target.nextElementSibling.style.display = 'block'
+                }}
               />
+              <div style={{display: 'none'}}>
+                <span className="text-3xl font-light text-gray-900">VoiceVault</span>
+              </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-900 mb-2">
-                Password
-              </label>
-              <input
-                type="password"
-                value={loginPassword}
-                onChange={(e) => setLoginPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#f4b840] focus:border-transparent"
-                required
-              />
+            {/* Form Header */}
+            <div className="mb-8">
+              <h2 className="text-2xl font-light text-gray-900 mb-2">
+                {isRegistering ? 'Create account' : 'Welcome back'}
+              </h2>
+              <p className="text-sm text-gray-600 font-light">
+                {isRegistering
+                  ? 'Start archiving your audio'
+                  : 'Sign in to continue'}
+              </p>
             </div>
 
-            <button
-              type="submit"
-              className="w-full bg-[#f4b840] hover:bg-[#e5a930] text-[#1a1a1a] px-4 py-3 rounded-lg font-semibold transition-colors"
-            >
-              {isRegistering ? 'Register' : 'Log In'}
-            </button>
-          </form>
+            {/* Error Message */}
+            {loginError && (
+              <div className="mb-6 px-4 py-3 border border-red-200 rounded text-sm text-red-700 bg-red-50">
+                {loginError}
+              </div>
+            )}
 
-          <div className="mt-4 text-center">
-            <button
-              onClick={() => {
-                setIsRegistering(!isRegistering)
-                setLoginError(null)
-              }}
-              className="text-sm text-gray-600 hover:text-gray-900"
-            >
-              {isRegistering
-                ? 'Already have an account? Log in'
-                : "Don't have an account? Register"}
-            </button>
+            {/* Form */}
+            <form onSubmit={handleLogin} className="space-y-5">
+              <div>
+                <label className="block text-sm font-light text-gray-700 mb-2">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  value={loginEmail}
+                  onChange={(e) => setLoginEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  className="w-full px-4 py-3 border border-gray-300 rounded focus:outline-none focus:border-gray-900 transition-colors font-light"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-light text-gray-700 mb-2">
+                  Password
+                </label>
+                <input
+                  type="password"
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full px-4 py-3 border border-gray-300 rounded focus:outline-none focus:border-gray-900 transition-colors font-light"
+                  required
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full bg-[#f4b840] hover:bg-[#e5a930] text-[#1a1a1a] px-4 py-3 rounded font-medium transition-colors"
+              >
+                {isRegistering ? 'Create account' : 'Sign in'}
+              </button>
+            </form>
+
+            {/* Toggle */}
+            <div className="mt-6 text-center">
+              <button
+                onClick={() => {
+                  setIsRegistering(!isRegistering)
+                  setLoginError(null)
+                }}
+                className="text-sm text-gray-600 hover:text-gray-900 font-light"
+              >
+                {isRegistering
+                  ? 'Already have an account? Sign in'
+                  : "Don't have an account? Create one"}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -209,7 +279,7 @@ export default function App() {
 
   // Main App
   return (
-    <div className="h-screen bg-white-50 text-gray-800 flex flex-col overflow-hidden">
+    <div className="h-screen bg-white text-gray-800 flex flex-col overflow-hidden">
       <Header onSearch={handleSearch} onLogout={handleLogout} onNavigateToSearch={handleNavigateToSearch} />
 
       <div className="flex-1 flex overflow-hidden max-w-[1550px] mx-auto w-full">
