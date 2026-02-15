@@ -322,6 +322,9 @@ def add_rag_chunks(post_id: int, chunks: List[Dict[str, Any]]) -> List[Dict[str,
 
     rows = []
     for c in chunks:
+        embedding = c.get("embedding")
+        if isinstance(embedding, list):
+            embedding = "[" + ",".join(str(float(v)) for v in embedding) + "]"
         rows.append(
             {
                 "post_id": post_id,
@@ -329,7 +332,7 @@ def add_rag_chunks(post_id: int, chunks: List[Dict[str, Any]]) -> List[Dict[str,
                 "end_sec": c.get("end_sec"),
                 "text": c.get("text"),
                 "confidence": c.get("confidence"),
-                "embedding": c.get("embedding"),
+                "embedding": embedding,
             }
         )
 
@@ -364,6 +367,22 @@ def search_rag_chunks(user_id: int, query_text: str, page: int = 1, limit: int =
         .range(start, end)
         .execute()
     )
+    return _rows(response)
+
+
+def search_rag_chunks_vector(user_id: int, query_embedding: List[float], limit: int = 30) -> List[Dict[str, Any]]:
+    """
+    Vector search via SQL RPC function `match_rag_chunks` (pgvector).
+    """
+    vector_text = "[" + ",".join(str(float(v)) for v in query_embedding) + "]"
+    response = supabase.rpc(
+        "match_rag_chunks",
+        {
+            "p_user_id": user_id,
+            "p_query_embedding": vector_text,
+            "p_match_count": min(max(1, limit), 100),
+        },
+    ).execute()
     return _rows(response)
 
 
