@@ -34,6 +34,7 @@ from db_queries import (
     list_user_history,
     search_rag_chunks,
     update_audio_post,
+    upload_storage_object,
     upsert_archive_metadata,
     upsert_archive_rights,
 )
@@ -49,6 +50,7 @@ ALLOWED_MEDIA_EXTENSIONS = {"mp4", "mov", "mkv", "webm", "m4a", "mp3", "wav", "o
 WHISPER_MODEL = os.getenv("WHISPER_MODEL", "base")
 WHISPER_DEVICE = os.getenv("WHISPER_DEVICE", "cpu")
 WHISPER_COMPUTE_TYPE = os.getenv("WHISPER_COMPUTE_TYPE", "int8")
+ARCHIVE_BUCKET = os.getenv("SUPABASE_BUCKET", os.getenv("SUPABASE_ARCHIVE_BUCKET", "archives"))
 
 _whisper_model: WhisperModel | None = None
 
@@ -207,6 +209,7 @@ def api_upload_post():
     post_uuid = str(uuid.uuid4())
     safe_name = secure_filename(media.filename)
     storage_prefix = f"archive/{user_id}/{post_uuid}"
+    storage_object_path = f"{user_id}/{post_uuid}/original/{safe_name}"
     saved_path = UPLOAD_DIR / f"{post_uuid}_{safe_name}"
     media.save(saved_path)
 
@@ -226,12 +229,20 @@ def api_upload_post():
 
         post_id = int(created_post["post_id"])
         media_sha = _sha256(saved_path)
+        with saved_path.open("rb") as media_file:
+            upload_storage_object(
+                bucket=ARCHIVE_BUCKET,
+                object_path=storage_object_path,
+                content=media_file.read(),
+                content_type=media.mimetype or "application/octet-stream",
+                upsert=False,
+            )
 
         add_archive_file(
             post_id,
             {
                 "role": "original_audio",
-                "path": str(saved_path).replace("\\", "/"),
+                "path": f"{ARCHIVE_BUCKET}/{storage_object_path}",
                 "content_type": media.mimetype,
                 "size_bytes": saved_path.stat().st_size,
                 "sha256": media_sha,
@@ -300,7 +311,7 @@ def api_upload_post():
                 "post_id": post_id,
                 "visibility": visibility,
                 "status": "ready",
-                "audio_path": str(saved_path).replace("\\", "/"),
+                "audio_path": f"{ARCHIVE_BUCKET}/{storage_object_path}",
                 "transcript_text": transcript_text,
                 "prompt": prompt_text,
                 "rag_chunk_count": len(rag_rows),

@@ -36,6 +36,26 @@ def _paginate(page: int, limit: int) -> tuple[int, int]:
     return start, end
 
 
+def upload_storage_object(
+    bucket: str,
+    object_path: str,
+    content: bytes,
+    content_type: str = "application/octet-stream",
+    upsert: bool = False,
+) -> Dict[str, Any]:
+    """
+    Upload bytes to Supabase Storage and return upload response data.
+    """
+    return (
+        supabase.storage.from_(bucket)
+        .upload(
+            object_path,
+            content,
+            {"content-type": content_type, "upsert": str(upsert).lower()},
+        )
+    )
+
+
 # ==================== Users ====================
 
 def create_user(payload: Dict[str, Any]) -> Dict[str, Any]:
