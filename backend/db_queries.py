@@ -3,7 +3,7 @@ Supabase data layer aligned with TitanForge/schema.sql.
 """
 
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from dotenv import load_dotenv
 from supabase import Client, create_client
@@ -36,6 +36,17 @@ def _paginate(page: int, limit: int) -> tuple[int, int]:
     return start, end
 
 
+def _parse_bucket_path(stored_path: str) -> Tuple[str, str]:
+    """
+    Convert stored path like 'archives/user/uuid/original/file.mp4'
+    into ('archives', 'user/uuid/original/file.mp4').
+    """
+    parts = (stored_path or "").split("/", 1)
+    if len(parts) != 2 or not parts[0] or not parts[1]:
+        raise ValueError(f"Invalid storage path format: {stored_path}")
+    return parts[0], parts[1]
+
+
 def upload_storage_object(
     bucket: str,
     object_path: str,
@@ -54,6 +65,50 @@ def upload_storage_object(
             {"content-type": content_type, "upsert": str(upsert).lower()},
         )
     )
+
+
+def get_original_audio_url(post_id: int, expires_in: int = 3600) -> Dict[str, Any]:
+    """
+    Return a signed URL for the original audio/video archive file.
+    """
+    response = (
+        supabase.table("archive_files")
+        .select("path, content_type")
+        .eq("post_id", post_id)
+        .eq("role", "original_audio")
+        .limit(1)
+        .execute()
+    )
+    row = _first(response)
+    if not row:
+        raise ValueError("Original audio file not found for this post.")
+
+    bucket, object_path = _parse_bucket_path(row["path"])
+
+    signed = supabase.storage.from_(bucket).create_signed_url(object_path, expires_in)
+
+    # Supabase python client can return dict or object with .get depending on version.
+    if isinstance(signed, dict):
+        signed_url = (
+            signed.get("signedURL")
+            or signed.get("signedUrl")
+            or signed.get("data", {}).get("signedUrl")
+            or signed.get("data", {}).get("signedURL")
+        )
+    else:
+        signed_url = None
+
+    if not signed_url:
+        raise RuntimeError("Failed to create signed URL for original audio.")
+
+    return {
+        "post_id": post_id,
+        "bucket": bucket,
+        "object_path": object_path,
+        "content_type": row.get("content_type"),
+        "signed_url": signed_url,
+        "expires_in": expires_in,
+    }
 
 
 # ==================== Users ====================

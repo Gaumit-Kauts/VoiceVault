@@ -22,6 +22,7 @@ from db_queries import (
     create_audio_post,
     create_user,
     get_archive_metadata,
+    get_original_audio_url,
     get_archive_rights,
     get_audio_post_by_id,
     get_post_bundle,
@@ -436,6 +437,34 @@ def api_post_bundle(post_id: int):
     if not bundle:
         return _error("Post not found.", 404)
     return jsonify(bundle)
+
+
+@api.get("/posts/<int:post_id>/audio-url")
+def api_post_audio_url(post_id: int):
+    """
+    Get signed URL for original audio/video so users can play it.
+    Private posts require owner user_id in query params.
+    """
+    row = get_audio_post_by_id(post_id)
+    if not row:
+        return _error("Post not found.", 404)
+
+    visibility = row.get("visibility")
+    owner_id = row.get("user_id")
+    requester_id = request.args.get("user_id", type=int)
+    expires_in = request.args.get("expires_in", default=3600, type=int)
+    expires_in = min(max(60, expires_in), 86400)
+
+    if visibility == "private" and requester_id != owner_id:
+        return _error("Not authorized to access this private audio.", 403)
+
+    try:
+        result = get_original_audio_url(post_id=post_id, expires_in=expires_in)
+        return jsonify(result)
+    except ValueError as e:
+        return _error(str(e), 404)
+    except Exception as e:
+        return _error(str(e), 500)
 
 
 @api.post("/posts/<int:post_id>/files")
