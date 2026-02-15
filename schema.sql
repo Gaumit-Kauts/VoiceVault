@@ -1,287 +1,155 @@
 
-CREATE OR REPLACE FUNCTION set_updated_at()
-RETURNS trigger AS $$
-BEGIN
-  NEW.updated_at = now();
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
 
--- ---------- Users ----------
+-- 1) Users
 CREATE TABLE users (
-  user_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  username VARCHAR(50) UNIQUE NOT NULL,
-  email VARCHAR(100) UNIQUE NOT NULL,
+  user_id       BIGSERIAL PRIMARY KEY,
+  email         VARCHAR(255) UNIQUE NOT NULL,
   password_hash VARCHAR(255) NOT NULL,
-  display_name VARCHAR(100),
-  profile_image_url VARCHAR(255),
-  bio TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  is_active BOOLEAN NOT NULL DEFAULT TRUE
+  display_name  VARCHAR(120),
+  avatar_url    VARCHAR(500),
+  bio           TEXT,
+  created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- Note: UNIQUE already creates indexes for username/email, so extra indexes are usually redundant.
+-- 2) Audio Posts
+CREATE TABLE audio_posts (
+  post_id        BIGSERIAL PRIMARY KEY,
+  user_id        BIGINT NOT NULL,
 
-CREATE TRIGGER users_set_updated_at
-BEFORE UPDATE ON users
-FOR EACH ROW
-EXECUTE FUNCTION set_updated_at();
+  title          VARCHAR(255) NOT NULL,
+  description    TEXT,
 
--- ---------- Categories ----------
-CREATE TABLE categories (
-  category_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  name VARCHAR(100) NOT NULL,
-  description TEXT,
-  parent_category_id BIGINT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  CONSTRAINT fk_parent_category
-    FOREIGN KEY (parent_category_id)
-    REFERENCES categories(category_id)
-    ON DELETE SET NULL
+  visibility     VARCHAR(20) NOT NULL DEFAULT 'private',
+  status         VARCHAR(20) NOT NULL DEFAULT 'uploaded',
+
+  recorded_date  DATE,
+  language       VARCHAR(20) DEFAULT 'en',
+
+  storage_prefix VARCHAR(500) NOT NULL,
+
+  manifest_sha256 CHAR(64),
+  bundle_sha256   CHAR(64),
+
+  published_at   TIMESTAMP,
+  created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  CONSTRAINT fk_audio_posts_user
+    FOREIGN KEY (user_id) REFERENCES users(user_id)
+      ON DELETE CASCADE,
+
+  CONSTRAINT chk_audio_visibility
+    CHECK (visibility IN ('private','public')),
+
+  CONSTRAINT chk_audio_status
+    CHECK (status IN ('uploaded','processing','ready','failed'))
 );
 
-CREATE INDEX idx_categories_name ON categories (name);
-CREATE INDEX idx_categories_parent ON categories (parent_category_id);
+CREATE INDEX idx_audio_posts_user ON audio_posts(user_id);
+CREATE INDEX idx_audio_posts_visibility ON audio_posts(visibility);
 
--- ---------- Posts ----------
-CREATE TABLE posts (
-  post_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  user_id BIGINT NOT NULL,
-  title VARCHAR(255),
-  transcribed_text TEXT,
-  audio_url VARCHAR(255) NOT NULL,
-  audio_duration_seconds INT,
-  image_url VARCHAR(255),
-  is_private BOOLEAN NOT NULL DEFAULT FALSE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+-- 3) Archive Files (integrity ledger)
+CREATE TABLE archive_files (
+  file_id      BIGSERIAL PRIMARY KEY,
+  post_id      BIGINT NOT NULL,
 
-  -- Postgres full-text search column (stored generated)
-  search_tsv tsvector GENERATED ALWAYS AS (
-    to_tsvector('english', coalesce(title,'') || ' ' || coalesce(transcribed_text,''))
-  ) STORED,
+  role         VARCHAR(30) NOT NULL,
+  path         VARCHAR(500) NOT NULL,
+  content_type VARCHAR(120),
+  size_bytes   BIGINT,
+  sha256       CHAR(64) NOT NULL,
 
-  CONSTRAINT fk_posts_user
-    FOREIGN KEY (user_id)
-    REFERENCES users(user_id)
-    ON DELETE CASCADE
+  created_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  CONSTRAINT fk_archive_files_post
+    FOREIGN KEY (post_id) REFERENCES audio_posts(post_id)
+      ON DELETE CASCADE,
+
+  CONSTRAINT uq_archive_post_role UNIQUE (post_id, role),
+  CONSTRAINT uq_archive_post_path UNIQUE (post_id, path),
+
+  CONSTRAINT chk_archive_role CHECK (role IN (
+    'original_audio',
+    'normalized_audio',
+    'transcript_json',
+    'transcript_txt',
+    'metadata',
+    'rights',
+    'manifest',
+    'bundle'
+  ))
 );
 
-CREATE TRIGGER posts_set_updated_at
-BEFORE UPDATE ON posts
-FOR EACH ROW
-EXECUTE FUNCTION set_updated_at();
+CREATE INDEX idx_archive_files_post ON archive_files(post_id);
 
-CREATE INDEX idx_posts_user_id ON posts (user_id);
-CREATE INDEX idx_posts_created_at ON posts (created_at);
-CREATE INDEX idx_posts_is_private ON posts (is_private);
+-- 4) Archive Metadata (store JSON as TEXT to keep it "plain")
+CREATE TABLE archive_metadata (
+  post_id     BIGINT PRIMARY KEY,
+  metadata    TEXT NOT NULL,  -- JSON string
 
--- Full-text GIN index (replaces MySQL FULLTEXT)
-CREATE INDEX idx_posts_search_tsv ON posts USING GIN (search_tsv);
+  created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
--- ---------- Post Categories (Many-to-Many) ----------
-CREATE TABLE post_categories (
-  post_id BIGINT NOT NULL,
-  category_id BIGINT NOT NULL,
-  PRIMARY KEY (post_id, category_id),
-  CONSTRAINT fk_pc_post
-    FOREIGN KEY (post_id) REFERENCES posts(post_id) ON DELETE CASCADE,
-  CONSTRAINT fk_pc_category
-    FOREIGN KEY (category_id) REFERENCES categories(category_id) ON DELETE CASCADE
+  CONSTRAINT fk_archive_metadata_post
+    FOREIGN KEY (post_id) REFERENCES audio_posts(post_id)
+      ON DELETE CASCADE
 );
 
-CREATE INDEX idx_post_categories_category_id ON post_categories (category_id);
+-- 5) Archive Rights / Consent (store arrays as TEXT to keep it "plain")
+CREATE TABLE archive_rights (
+  post_id             BIGINT PRIMARY KEY,
 
--- ---------- User Category Follows ----------
-CREATE TABLE user_category_follows (
-  user_id BIGINT NOT NULL,
-  category_id BIGINT NOT NULL,
-  followed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  PRIMARY KEY (user_id, category_id),
-  CONSTRAINT fk_ucf_user
-    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
-  CONSTRAINT fk_ucf_category
-    FOREIGN KEY (category_id) REFERENCES categories(category_id) ON DELETE CASCADE
+  has_speaker_consent BOOLEAN NOT NULL DEFAULT FALSE,
+  license             VARCHAR(50),
+  consent_notes       TEXT,
+
+  allowed_use         TEXT,  -- JSON string like ["education","research"]
+  restrictions        TEXT,  -- JSON string like ["no_doxxing"]
+
+  updated_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  CONSTRAINT fk_archive_rights_post
+    FOREIGN KEY (post_id) REFERENCES audio_posts(post_id)
+      ON DELETE CASCADE
 );
 
-CREATE INDEX idx_ucf_user_id ON user_category_follows (user_id);
-CREATE INDEX idx_ucf_category_id ON user_category_follows (category_id);
+-- 6) RAG Chunks (store embeddings as TEXT to keep it "plain")
+CREATE TABLE rag_chunks (
+  chunk_id    BIGSERIAL PRIMARY KEY,
+  post_id     BIGINT NOT NULL,
 
--- ---------- User Follows ----------
-CREATE TABLE user_follows (
-  follower_id BIGINT NOT NULL,
-  following_id BIGINT NOT NULL,
-  followed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  PRIMARY KEY (follower_id, following_id),
-  CONSTRAINT fk_uf_follower
-    FOREIGN KEY (follower_id) REFERENCES users(user_id) ON DELETE CASCADE,
-  CONSTRAINT fk_uf_following
-    FOREIGN KEY (following_id) REFERENCES users(user_id) ON DELETE CASCADE
+  start_sec   DOUBLE PRECISION NOT NULL,
+  end_sec     DOUBLE PRECISION NOT NULL,
+  text        TEXT NOT NULL,
+  confidence  DOUBLE PRECISION,
+
+  embedding   TEXT, -- JSON string like [0.01, -0.02, ...]
+
+  created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  CONSTRAINT fk_rag_chunks_post
+    FOREIGN KEY (post_id) REFERENCES audio_posts(post_id)
+      ON DELETE CASCADE
 );
 
-CREATE INDEX idx_user_follows_follower_id ON user_follows (follower_id);
-CREATE INDEX idx_user_follows_following_id ON user_follows (following_id);
+CREATE INDEX idx_rag_chunks_post ON rag_chunks(post_id);
 
--- ---------- Post Likes ----------
-CREATE TABLE post_likes (
-  user_id BIGINT NOT NULL,
-  post_id BIGINT NOT NULL,
-  liked_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  PRIMARY KEY (user_id, post_id),
-  CONSTRAINT fk_pl_user
-    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
-  CONSTRAINT fk_pl_post
-    FOREIGN KEY (post_id) REFERENCES posts(post_id) ON DELETE CASCADE
+-- 7) Audit Log
+CREATE TABLE audit_log (
+  log_id     BIGSERIAL PRIMARY KEY,
+  post_id    BIGINT,
+  user_id    BIGINT,
+  action     VARCHAR(50) NOT NULL,
+  details    TEXT, -- JSON string
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  CONSTRAINT fk_audit_post
+    FOREIGN KEY (post_id) REFERENCES audio_posts(post_id)
+      ON DELETE SET NULL,
+
+  CONSTRAINT fk_audit_user
+    FOREIGN KEY (user_id) REFERENCES users(user_id)
+      ON DELETE SET NULL
 );
 
-CREATE INDEX idx_post_likes_post_id ON post_likes (post_id);
-CREATE INDEX idx_post_likes_liked_at ON post_likes (liked_at);
-
--- ---------- Comments ----------
-CREATE TABLE comments (
-  comment_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  post_id BIGINT NOT NULL,
-  user_id BIGINT NOT NULL,
-  comment_text TEXT NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  CONSTRAINT fk_comments_post
-    FOREIGN KEY (post_id) REFERENCES posts(post_id) ON DELETE CASCADE,
-  CONSTRAINT fk_comments_user
-    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
-);
-
-CREATE TRIGGER comments_set_updated_at
-BEFORE UPDATE ON comments
-FOR EACH ROW
-EXECUTE FUNCTION set_updated_at();
-
-CREATE INDEX idx_comments_post_id ON comments (post_id);
-CREATE INDEX idx_comments_user_id ON comments (user_id);
-CREATE INDEX idx_comments_created_at ON comments (created_at);
-
--- ---------- Audio Listening History ----------
-CREATE TABLE audio_listening_history (
-  history_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  user_id BIGINT NOT NULL,
-  post_id BIGINT NOT NULL,
-  listened_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  listen_duration_seconds INT,
-  completed BOOLEAN NOT NULL DEFAULT FALSE,
-  CONSTRAINT fk_alh_user
-    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
-  CONSTRAINT fk_alh_post
-    FOREIGN KEY (post_id) REFERENCES posts(post_id) ON DELETE CASCADE
-);
-
-CREATE INDEX idx_alh_user_id ON audio_listening_history (user_id);
-CREATE INDEX idx_alh_post_id ON audio_listening_history (post_id);
-CREATE INDEX idx_alh_listened_at ON audio_listening_history (listened_at);
-
--- ---------- Search History ----------
-CREATE TABLE search_history (
-  search_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  user_id BIGINT NOT NULL,
-  search_query VARCHAR(255) NOT NULL,
-  searched_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  CONSTRAINT fk_search_user
-    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
-);
-
-CREATE INDEX idx_search_user_id ON search_history (user_id);
-CREATE INDEX idx_search_searched_at ON search_history (searched_at);
-CREATE INDEX idx_search_query ON search_history (search_query);
-
--- ---------- Bookmarks ----------
-CREATE TABLE bookmarks (
-  user_id BIGINT NOT NULL,
-  post_id BIGINT NOT NULL,
-  bookmarked_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  PRIMARY KEY (user_id, post_id),
-  CONSTRAINT fk_bookmarks_user
-    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
-  CONSTRAINT fk_bookmarks_post
-    FOREIGN KEY (post_id) REFERENCES posts(post_id) ON DELETE CASCADE
-);
-
-CREATE INDEX idx_bookmarks_user_id ON bookmarks (user_id);
-CREATE INDEX idx_bookmarks_bookmarked_at ON bookmarks (bookmarked_at);
-
--- ============================================
--- SAMPLE SEED DATA
--- ============================================
-
-INSERT INTO categories (name, description) VALUES
-('Historical Events', 'Posts about significant historical events and eras'),
-('Cultural Traditions', 'Cultural practices, traditions, and heritage'),
-('Personal Stories', 'Individual memories and personal narratives'),
-('Oral History', 'Recorded oral histories and interviews'),
-('Family History', 'Family stories and genealogy'),
-('Local History', 'Community and local historical accounts');
-
--- ============================================
--- USEFUL QUERIES (Postgres parameter style: $1, $2, ...)
--- ============================================
-
--- Query 1: Personalized feed
-/*
-SELECT DISTINCT p.*, u.username, u.display_name
-FROM posts p
-JOIN users u ON p.user_id = u.user_id
-LEFT JOIN post_categories pc ON p.post_id = pc.post_id
-LEFT JOIN user_category_follows ucf ON pc.category_id = ucf.category_id AND ucf.user_id = $1
-LEFT JOIN user_follows uf ON p.user_id = uf.following_id AND uf.follower_id = $1
-WHERE p.is_private = FALSE
-  AND (ucf.user_id IS NOT NULL OR uf.follower_id IS NOT NULL OR p.user_id = $1)
-ORDER BY p.created_at DESC
-LIMIT 50;
-*/
-
--- Query 2: Full-text search (replaces MySQL MATCH ... AGAINST)
--- Tip: websearch_to_tsquery supports Google-like syntax; plainto_tsquery is simpler.
-/*
-SELECT p.*, u.username,
-       ts_rank(p.search_tsv, websearch_to_tsquery('english', $1)) AS relevance
-FROM posts p
-JOIN users u ON p.user_id = u.user_id
-WHERE p.search_tsv @@ websearch_to_tsquery('english', $1)
-  AND (p.is_private = FALSE OR p.user_id = $2)
-ORDER BY relevance DESC
-LIMIT 50;
-*/
-
--- Query 3: User's private posts
-/*
-SELECT p.*,
-       COUNT(DISTINCT pl.user_id) AS like_count,
-       COUNT(DISTINCT c.comment_id) AS comment_count
-FROM posts p
-LEFT JOIN post_likes pl ON p.post_id = pl.post_id
-LEFT JOIN comments c ON p.post_id = c.post_id
-WHERE p.user_id = $1 AND p.is_private = TRUE
-GROUP BY p.post_id
-ORDER BY p.created_at DESC;
-*/
-
--- Query 4: Posts by category
-/*
-SELECT p.*, u.username, u.display_name
-FROM posts p
-JOIN users u ON p.user_id = u.user_id
-JOIN post_categories pc ON p.post_id = pc.post_id
-WHERE pc.category_id = $1 AND p.is_private = FALSE
-ORDER BY p.created_at DESC
-LIMIT 50;
-*/
-
--- Query 5: Listening history
-/*
-SELECT p.*, u.username, alh.listened_at, alh.listen_duration_seconds, alh.completed
-FROM audio_listening_history alh
-JOIN posts p ON alh.post_id = p.post_id
-JOIN users u ON p.user_id = u.user_id
-WHERE alh.user_id = $1
-ORDER BY alh.listened_at DESC
-LIMIT 50;
-*/
+CREATE INDEX idx_audit_post ON audit_log(post_id);
