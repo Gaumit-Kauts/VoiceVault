@@ -41,7 +41,7 @@ class ApiClient {
   }
 
   // ==================== Auth ====================
-  
+
   async register(email, password, displayName = null) {
     return this.request('/auth/register', {
       method: 'POST',
@@ -58,12 +58,12 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     });
-    
+
     // Store user ID for subsequent requests
     if (response.user?.user_id) {
       this.setUserId(response.user.user_id);
     }
-    
+
     return response;
   }
 
@@ -81,7 +81,7 @@ class ApiClient {
 
   async uploadPost(formData) {
     const url = `${this.baseUrl}/posts/upload`;
-    
+
     try {
       const response = await fetch(url, {
         method: 'POST',
@@ -103,7 +103,7 @@ class ApiClient {
 
   async getPosts(params = {}) {
     const queryParams = new URLSearchParams();
-    
+
     if (params.page) queryParams.append('page', params.page);
     if (params.limit) queryParams.append('limit', params.limit);
     if (params.visibility) queryParams.append('visibility', params.visibility);
@@ -153,6 +153,12 @@ class ApiClient {
     return this.request(`/posts/${postId}/metadata`);
   }
 
+  async exportPost(postId) {
+  const response = await fetch(`/api/posts/${postId}/download`, { method: "GET" });
+  if (!response.ok) throw new Error(`Failed to download post: ${response.statusText}`);
+  return await response.blob(); // returns proper Blob ready for download
+}
+
   // ==================== RAG Search ====================
 
   async searchRAG(query, userId, page = 1, limit = 30) {
@@ -174,7 +180,7 @@ class ApiClient {
 
   async getAuditLogs(params = {}) {
     const queryParams = new URLSearchParams();
-    
+
     if (params.post_id) queryParams.append('post_id', params.post_id);
     if (params.user_id) queryParams.append('user_id', params.user_id);
     if (params.page) queryParams.append('page', params.page);

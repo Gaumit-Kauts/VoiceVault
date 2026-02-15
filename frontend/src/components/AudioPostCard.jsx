@@ -24,7 +24,7 @@ export default function AudioPostCard({ post }) {
     const now = new Date()
     const diffMs = now - date
     const diffMins = Math.floor(diffMs / 60000)
-    
+
     if (diffMins < 60) return `${diffMins}m ago`
     if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h ago`
     return `${Math.floor(diffMins / 1440)}d ago`
@@ -42,7 +42,7 @@ export default function AudioPostCard({ post }) {
     if (post.status === 'ready' && !transcript && !loadingTranscript) {
       loadTranscript()
     }
-    
+
     // Set audio source if available
     if (post.audio_url && audioRef.current) {
       console.log('Setting audio src to:', post.audio_url)
@@ -75,7 +75,7 @@ export default function AudioPostCard({ post }) {
 
   const togglePlay = () => {
     if (!audioRef.current) return
-    
+
     if (isPlaying) {
       audioRef.current.pause()
     } else {
@@ -107,7 +107,7 @@ export default function AudioPostCard({ post }) {
     const x = e.clientX - rect.left
     const percentage = x / rect.width
     const newTime = percentage * duration
-    
+
     if (audioRef.current) {
       audioRef.current.currentTime = newTime
       setCurrentTime(newTime)
@@ -121,6 +121,24 @@ export default function AudioPostCard({ post }) {
       audioRef.current.volume = newVolume
     }
   }
+
+  const handleDownload = async () => {
+    try {
+      const zipBlob = await api.exportPost(post.post_id);
+
+      const url = window.URL.createObjectURL(zipBlob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${post.title.replace(/\s+/g, "_")}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Failed to download post:", err);
+    }
+  }
+
 
   const handleEnded = () => {
     setIsPlaying(false)
@@ -156,6 +174,15 @@ export default function AudioPostCard({ post }) {
               </span>
             </div>
           </div>
+          {post.status === "ready" && (
+  <button
+    onClick={handleDownload}
+    className="mt-2 px-3 py-1 bg-[#f4b840] text-black rounded hover:bg-[#e5a930] transition-colors"
+  >
+    Download Post
+  </button>
+)}
+
           <button className="text-gray-500 hover:text-gray-700">
             <MoreVertical size={18} />
           </button>
@@ -185,7 +212,7 @@ export default function AudioPostCard({ post }) {
               />
 
               <div className="flex items-center gap-4">
-                <button 
+                <button
                   onClick={togglePlay}
                   className="w-10 h-10 bg-[#f4b840] hover:bg-[#e5a930] rounded-full flex items-center justify-center text-[#1a1a1a] transition-colors"
                 >
@@ -196,11 +223,11 @@ export default function AudioPostCard({ post }) {
                   )}
                 </button>
                 <div className="flex-1">
-                  <div 
+                  <div
                     className="h-1.5 bg-gray-300 rounded-full overflow-hidden mb-2 cursor-pointer"
                     onClick={handleSeek}
                   >
-                    <div 
+                    <div
                       className="h-full bg-[#f4b840] rounded-full transition-all"
                       style={{ width: `${progress}%` }}
                     ></div>
@@ -241,7 +268,7 @@ export default function AudioPostCard({ post }) {
                   transcriptExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />
                 )}
               </button>
-              
+
               {transcript && (
                 <div className={`bg-white transition-all ${transcriptExpanded ? 'max-h-96' : 'max-h-24'} overflow-y-auto`}>
                   <div className="p-4">
