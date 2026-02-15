@@ -178,6 +178,12 @@ export default function AudioPostCard({ post }) {
               }`}>
                 {post.status}
               </span>
+                <span>•</span>
+              {post.language && (
+                  <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded">
+                    {post.language.toUpperCase()}
+                  </span>
+                )}
             </div>
           </div>
           {post.status === 'ready' && (
@@ -205,12 +211,15 @@ export default function AudioPostCard({ post }) {
           </button>
         </div>
 
+
+
         {/* Description */}
         {post.description && (
           <p className="text-sm text-gray-700 mb-4 line-clamp-2">
             {post.description}
           </p>
         )}
+
 
         {/* Audio Player - Only show if ready */}
         {post.status === 'ready' && (
@@ -323,15 +332,6 @@ export default function AudioPostCard({ post }) {
         {post.status === 'failed' && (
           <div className="bg-red-50 rounded-lg p-4 border border-red-200">
             <p className="text-sm text-red-800">Failed to process this recording. Please try uploading again.</p>
-          </div>
-        )}
-
-        {/* Language Tag */}
-        {post.language && (
-          <div className="mt-3">
-            <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">
-              {post.language.toUpperCase()}
-            </span>
           </div>
         )}
       </div>

@@ -1,9 +1,10 @@
-import { Plus, Home, History, Settings } from 'lucide-react'
+import { Plus, Home, History, Settings, Search } from 'lucide-react'
 
 export default function Sidebar({ user, activeTab, onTabChange }) {
   const navItems = [
     { id: 'create', label: 'Make an Archive Post', icon: Plus },
     { id: 'feed', label: 'My Feed', icon: Home },
+    { id: 'search', label: 'Search Archives', icon: Search },
     { id: 'history', label: 'History', icon: History },
     { id: 'settings', label: 'Settings', icon: Settings }
   ]
@@ -23,7 +24,7 @@ export default function Sidebar({ user, activeTab, onTabChange }) {
     }
     return 'U'
   }
-  
+
   return (
     <aside className="w-64 bg-white border-r border-gray-200 p-6 hidden md:block flex-shrink-0 overflow-y-auto">
       <div className="sticky top-6">

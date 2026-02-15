@@ -5,6 +5,7 @@ import Feed from './pages/Feed'
 import CreatePost from './pages/CreatePost'
 import History from './pages/History'
 import Settings from './pages/Settings'
+import Search from './pages/Search'
 import { api } from './api'
 
 export default function App() {
@@ -16,6 +17,7 @@ export default function App() {
   const [isRegistering, setIsRegistering] = useState(false)
   const [loginError, setLoginError] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [headerSearchQuery, setHeaderSearchQuery] = useState('')
 
   // Check for saved user on mount
   useEffect(() => {
@@ -38,10 +40,10 @@ export default function App() {
     setLoginError(null)
 
     try {
-      const response = isRegistering 
+      const response = isRegistering
         ? await api.register(loginEmail, loginPassword, loginEmail.split('@')[0])
         : await api.login(loginEmail, loginPassword)
-      
+
       setUser(response.user)
       localStorage.setItem('voicevault_user', JSON.stringify(response.user))
       setShowLogin(false)
@@ -61,7 +63,7 @@ export default function App() {
 
   const handleSearch = async (query) => {
     setSearchQuery(query)
-    
+
     if (query.trim() && user?.user_id) {
       try {
         const results = await api.searchRAG(query, user.user_id)
@@ -71,6 +73,11 @@ export default function App() {
         console.error('Search error:', err)
       }
     }
+  }
+
+  const handleNavigateToSearch = (query) => {
+    setActiveTab('search')
+    setHeaderSearchQuery(query)
   }
 
   const handlePostCreated = () => {
@@ -90,6 +97,8 @@ export default function App() {
     switch (activeTab) {
       case 'create':
         return <CreatePost user={user} onPostCreated={handlePostCreated} />
+      case 'search':
+        return <Search user={user} initialQuery={headerSearchQuery} />
       case 'history':
         return <History user={user} />
       case 'settings':
@@ -165,8 +174,8 @@ export default function App() {
               }}
               className="text-sm text-gray-600 hover:text-gray-900"
             >
-              {isRegistering 
-                ? 'Already have an account? Log in' 
+              {isRegistering
+                ? 'Already have an account? Log in'
                 : "Don't have an account? Register"}
             </button>
           </div>
@@ -178,10 +187,10 @@ export default function App() {
   // Main App
   return (
     <div className="h-screen bg-gray-50 text-gray-800 flex flex-col overflow-hidden">
-      <Header user={user} onSearch={handleSearch} onLogout={handleLogout} />
+      <Header onSearch={handleSearch} onLogout={handleLogout} onNavigateToSearch={handleNavigateToSearch} />
 
       <div className="flex-1 flex overflow-hidden max-w-[1400px] mx-auto w-full">
-        <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
+        <Sidebar user={user} activeTab={activeTab} onTabChange={setActiveTab} />
 
         <main className="flex-1 overflow-y-auto p-6">
           {renderPage()}

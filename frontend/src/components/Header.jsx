@@ -1,13 +1,21 @@
 import { Search, LogOut } from 'lucide-react'
 import { useState } from 'react'
 
-export default function Header({ onSearch, onLogout }) {
+export default function Header({ onSearch, onLogout, onNavigateToSearch }) {
   const [searchQuery, setSearchQuery] = useState('')
 
   const handleSearch = (e) => {
-    const query = e.target.value
-    setSearchQuery(query)
-    onSearch?.(query)
+    e.preventDefault()
+    if (searchQuery.trim()) {
+      onNavigateToSearch?.(searchQuery.trim())
+      onSearch?.(searchQuery.trim())
+    }
+  }
+
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      handleSearch(e)
+    }
   }
 
   return (
@@ -24,18 +32,19 @@ export default function Header({ onSearch, onLogout }) {
         </div>
 
         {/* Center: Search Bar */}
-        <div className="flex-1 max-w-2xl">
+        <form onSubmit={handleSearch} className="flex-1 max-w-2xl">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
             <input
               type="text"
               placeholder="Search your archives..."
               value={searchQuery}
-              onChange={handleSearch}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyPress={handleKeyPress}
               className="w-full bg-gray-50 border border-gray-300 rounded-lg pl-10 pr-4 py-2 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#f4b840] focus:border-transparent"
             />
           </div>
-        </div>
+        </form>
 
         {/* Right: Logout */}
         <div className="flex items-center gap-3 flex-shrink-0">
