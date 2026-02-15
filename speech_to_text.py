@@ -2,10 +2,13 @@
 import uuid
 from pathlib import Path
 
-from flask import Flask, jsonify, request
-from openai import OpenAI
+from dotenv import load_dotenv
+from flask import Flask, jsonify, render_template, request
+from faster_whisper import WhisperModel
 from supabase import Client, create_client
 from werkzeug.utils import secure_filename
+
+load_dotenv()
 
 app = Flask(__name__)
 
@@ -13,17 +16,28 @@ UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "uploads"))
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 ALLOWED_EXTENSIONS = {"mp3", "wav", "m4a", "ogg", "webm", "flac", "mp4"}
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+WHISPER_MODEL_NAME = os.getenv("WHISPER_MODEL", "base")
+WHISPER_DEVICE = os.getenv("WHISPER_DEVICE", "cpu")
+WHISPER_COMPUTE_TYPE = os.getenv("WHISPER_COMPUTE_TYPE", "int8")
 
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+SUPABASE_URL = (os.getenv("SUPABASE_URL") or "").strip()
+SUPABASE_SERVICE_ROLE_KEY = (os.getenv("SUPABASE_SERVICE_ROLE_KEY") or "").strip()
+supabase: Client | None = None
+if SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY:
+    supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
-if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
-    raise RuntimeError(
-        "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables."
-    )
+_model: WhisperModel | None = None
 
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+
+def get_whisper_model() -> WhisperModel:
+    global _model
+    if _model is None:
+        _model = WhisperModel(
+            WHISPER_MODEL_NAME,
+            device=WHISPER_DEVICE,
+            compute_type=WHISPER_COMPUTE_TYPE,
+        )
+    return _model
 
 
 def allowed_file(filename: str) -> bool:
@@ -52,21 +66,15 @@ def parse_category_ids(value: str | None) -> list[int]:
 
 
 def transcribe_audio(local_path: Path) -> str:
-    with local_path.open("rb") as audio_file:
-        transcript = client.audio.transcriptions.create(
-            model="whisper-1",
-            file=audio_file,
-            response_format="text",
-        )
-
-    if isinstance(transcript, str):
-        return transcript.strip()
-
-    text_value = getattr(transcript, "text", "")
-    return str(text_value).strip()
+    model = get_whisper_model()
+    segments, _info = model.transcribe(str(local_path))
+    text = " ".join(segment.text.strip() for segment in segments).strip()
+    return text
 
 
 def verify_supabase_connection() -> None:
+    if not supabase:
+        raise RuntimeError("Supabase is not configured.")
     supabase.table("categories").select("category_id").limit(1).execute()
 
 
@@ -80,6 +88,9 @@ def insert_post(
     image_url: str | None,
     category_ids: list[int],
 ) -> int:
+    if not supabase:
+        raise RuntimeError("Supabase is not configured.")
+
     post_payload = {
         "user_id": user_id,
         "title": title,
@@ -108,7 +119,17 @@ def insert_post(
 
 @app.get("/health")
 def health_check():
-    return jsonify({"status": "ok"})
+    return jsonify({
+        "status": "ok",
+        "whisper_model": WHISPER_MODEL_NAME,
+        "whisper_device": WHISPER_DEVICE,
+        "whisper_compute_type": WHISPER_COMPUTE_TYPE,
+    })
+
+
+@app.get("/")
+def demo_frontend():
+    return render_template("index.html")
 
 
 @app.get("/health/db")
@@ -133,13 +154,12 @@ def upload_audio():
         return jsonify({"error": "Unsupported file extension."}), 400
 
     user_id_raw = request.form.get("user_id")
-    if not user_id_raw:
-        return jsonify({"error": "'user_id' is required in form-data."}), 400
-
-    try:
-        user_id = int(user_id_raw)
-    except ValueError:
-        return jsonify({"error": "'user_id' must be an integer."}), 400
+    user_id: int | None = None
+    if user_id_raw:
+        try:
+            user_id = int(user_id_raw)
+        except ValueError:
+            return jsonify({"error": "'user_id' must be an integer."}), 400
 
     try:
         category_ids = parse_category_ids(request.form.get("category_ids"))
@@ -159,24 +179,35 @@ def upload_audio():
 
     try:
         transcript_text = transcribe_audio(local_path)
-        post_id = insert_post(
-            user_id=user_id,
-            title=title,
-            transcribed_text=transcript_text,
-            audio_url=str(local_path).replace("\\", "/"),
-            is_private=is_private,
-            image_url=image_url,
-            category_ids=category_ids,
-        )
     except Exception as error:
-        return jsonify({"error": "Failed to process audio", "details": str(error)}), 500
+        return jsonify({"error": "Transcription failed", "details": str(error)}), 500
+
+    post_id: int | None = None
+    db_warning: str | None = None
+    if supabase:
+        if user_id is None:
+            db_warning = "Transcribed successfully. Skipped Supabase save because 'user_id' was not provided."
+        else:
+            try:
+                post_id = insert_post(
+                    user_id=user_id,
+                    title=title,
+                    transcribed_text=transcript_text,
+                    audio_url=str(local_path).replace("\\", "/"),
+                    is_private=is_private,
+                    image_url=image_url,
+                    category_ids=category_ids,
+                )
+            except Exception as error:
+                db_warning = f"Transcribed successfully, but Supabase save failed: {error}"
 
     return jsonify(
         {
-            "message": "Audio uploaded, transcribed, and saved to Supabase.",
+            "message": "Audio uploaded and transcribed (local whisper).",
             "post_id": post_id,
             "transcribed_text": transcript_text,
             "audio_url": str(local_path).replace("\\", "/"),
+            "db_warning": db_warning,
         }
     )
 
