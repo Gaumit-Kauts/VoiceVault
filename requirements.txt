@@ -1,4 +1,5 @@
 ﻿flask
+flask-cors
 faster-whisper
 supabase
 python-dotenv
