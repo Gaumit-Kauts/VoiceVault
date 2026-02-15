@@ -123,7 +123,7 @@ CREATE TABLE rag_chunks (
   text        TEXT NOT NULL,
   confidence  DOUBLE PRECISION,
 
-  embedding   TEXT, -- JSON string like [0.01, -0.02, ...]
+  embedding   vector(1536), 
 
   created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
