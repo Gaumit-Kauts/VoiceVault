@@ -445,6 +445,10 @@ def api_get_post(post_id: int):
     row = get_audio_post_by_id(post_id)
     if not row:
         return _error("Post not found.", 404)
+
+    # CRITICAL: Add audio URL to the response
+    row = _add_audio_url(row)
+
     return jsonify(row)
 
 

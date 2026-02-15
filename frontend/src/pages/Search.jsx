@@ -169,14 +169,7 @@ export default function Search({ user, initialQuery = '', onViewPost}) {
                             </span>
                           </>
                         )}
-                        {result.confidence && (
-                          <>
-                            <span>•</span>
-                            <span className="text-green-600">
-                              {Math.round(result.confidence * 100)}% confidence
-                            </span>
-                          </>
-                        )}
+            
                       </div>
                     </div>
                     <button

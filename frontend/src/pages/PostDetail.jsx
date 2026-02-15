@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { ArrowLeft, Play, Pause, Volume2, Clock, Download, Share2, Calendar, Globe, Lock } from 'lucide-react'
+import { ArrowLeft, Clock, Download, Share2, Calendar, Globe, Lock, Play, Pause, Volume2 } from 'lucide-react'
 import { api } from '../api'
 
 export default function PostDetail({ postId, user, onBack }) {
@@ -8,13 +8,13 @@ export default function PostDetail({ postId, user, onBack }) {
   const [chunks, setChunks] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [downloading, setDownloading] = useState(false)
 
   // Audio player state
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [volume, setVolume] = useState(1)
-  const [downloading, setDownloading] = useState(false)
   const audioRef = useRef(null)
 
   useEffect(() => {
@@ -23,30 +23,24 @@ export default function PostDetail({ postId, user, onBack }) {
     }
   }, [postId])
 
-  // Add this useEffect in PostDetail
-useEffect(() => {
-  if (audioRef.current && post?.audio_url) {
-    console.log('Setting audio src:', post.audio_url)
-    audioRef.current.src = post.audio_url
-    audioRef.current.load()  // Force reload
-  }
-}, [post?.audio_url])
-
+  // Set audio source when post loads
+  useEffect(() => {
+    if (post?.audio_url && audioRef.current) {
+      console.log('Setting audio source:', post.audio_url)
+      audioRef.current.src = post.audio_url
+      audioRef.current.load()
+    }
+  }, [post?.audio_url])
 
   const loadPostData = async () => {
     setLoading(true)
     setError(null)
 
     try {
-      // Load post data
+      // Load post data (should already include audio_url from backend)
       const postData = await api.getPost(postId)
+      console.log('Loaded post data:', postData)
       setPost(postData)
-
-      // Load audio URL if available
-      if (postData.audio_url && audioRef.current) {
-        audioRef.current.src = postData.audio_url
-        audioRef.current.load()
-      }
 
       // Load metadata (contains transcript)
       try {
@@ -99,7 +93,8 @@ useEffect(() => {
 
   // Audio player handlers
   const togglePlay = () => {
-    if (!audioRef.current) return
+    if (!audioRef.current || !post?.audio_url) return
+
     if (isPlaying) {
       audioRef.current.pause()
     } else {
@@ -116,6 +111,7 @@ useEffect(() => {
 
   const handleLoadedMetadata = () => {
     if (audioRef.current) {
+      console.log('Audio metadata loaded, duration:', audioRef.current.duration)
       setDuration(audioRef.current.duration)
     }
   }
@@ -143,6 +139,11 @@ useEffect(() => {
   const handleEnded = () => {
     setIsPlaying(false)
     setCurrentTime(0)
+  }
+
+  const handleAudioError = (e) => {
+    console.error('Audio error:', e)
+    console.error('Audio element error:', audioRef.current?.error)
   }
 
   const handleDownload = async () => {
@@ -175,7 +176,6 @@ useEffect(() => {
         url: window.location.href
       })
     } else {
-      // Copy link to clipboard
       navigator.clipboard.writeText(window.location.href)
       alert('Link copied to clipboard!')
     }
@@ -294,7 +294,7 @@ useEffect(() => {
       </div>
 
       {/* Audio Player */}
-      {post.status === 'ready' && (
+      {post.status === 'ready' && post.audio_url && (
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Audio Player</h2>
 
@@ -303,50 +303,64 @@ useEffect(() => {
             onTimeUpdate={handleTimeUpdate}
             onLoadedMetadata={handleLoadedMetadata}
             onEnded={handleEnded}
+            onError={handleAudioError}
+            onCanPlay={() => console.log('Audio can play')}
             preload="metadata"
+            crossOrigin="anonymous"
           />
 
-          <div className="flex items-center gap-4 mb-4">
-            <button
-              onClick={togglePlay}
-              className="w-12 h-12 bg-[#f4b840] hover:bg-[#e5a930] rounded-full flex items-center justify-center text-[#1a1a1a] transition-colors"
-            >
-              {isPlaying ? (
-                <Pause size={20} fill="currentColor" />
-              ) : (
-                <Play size={20} fill="currentColor" />
-              )}
-            </button>
-
-            <div className="flex-1">
-              <div
-                className="h-2 bg-gray-300 rounded-full overflow-hidden mb-2 cursor-pointer"
-                onClick={handleSeek}
+          <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={togglePlay}
+                className="w-12 h-12 bg-[#f4b840] hover:bg-[#e5a930] rounded-full flex items-center justify-center text-[#1a1a1a] transition-colors"
               >
-                <div
-                  className="h-full bg-[#f4b840] rounded-full transition-all"
-                  style={{ width: `${progress}%` }}
-                ></div>
-              </div>
-              <div className="flex justify-between text-xs text-gray-600">
-                <span>{formatTime(currentTime)}</span>
-                <span>{formatTime(duration)}</span>
-              </div>
-            </div>
+                {isPlaying ? (
+                  <Pause size={20} fill="currentColor" />
+                ) : (
+                  <Play size={20} fill="currentColor" />
+                )}
+              </button>
 
-            <div className="flex items-center gap-2">
-              <Volume2 size={18} className="text-gray-600" />
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.01"
-                value={volume}
-                onChange={handleVolumeChange}
-                className="w-20 h-2 bg-gray-300 rounded-full appearance-none cursor-pointer"
-              />
+              <div className="flex-1">
+                <div
+                  className="h-2 bg-gray-300 rounded-full overflow-hidden mb-2 cursor-pointer"
+                  onClick={handleSeek}
+                >
+                  <div
+                    className="h-full bg-[#f4b840] rounded-full transition-all"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+                <div className="flex justify-between text-xs text-gray-600">
+                  <span>{formatTime(currentTime)}</span>
+                  <span>{formatTime(duration)}</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Volume2 size={18} className="text-gray-600" />
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={volume}
+                  onChange={handleVolumeChange}
+                  className="w-20 h-2 bg-gray-300 rounded-full appearance-none cursor-pointer"
+                  style={{
+                    background: `linear-gradient(to right, #f4b840 0%, #f4b840 ${volume * 100}%, #d1d5db ${volume * 100}%, #d1d5db 100%)`
+                  }}
+                />
+              </div>
             </div>
           </div>
+
+          {!post.audio_url && (
+            <p className="text-sm text-gray-500 text-center py-4">
+              Audio file not available
+            </p>
+          )}
         </div>
       )}
 

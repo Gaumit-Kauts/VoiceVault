@@ -150,7 +150,7 @@ class ApiClient {
   }
 
   async getAudioUrl(postId, expiresIn = 3600) {
-    return this.request(`/posts/${postId}/audio?expires_in=${expiresIn}`);
+    return this.request(`/posts/${postId}/audio-url`);
   }
 
   // ==================== Post Files ====================
