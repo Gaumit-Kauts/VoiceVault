@@ -583,3 +583,20 @@ def api_post_audit(post_id: int):
         return jsonify({"logs": list_audit_logs(post_id=post_id, page=page, limit=limit)})
     except Exception as e:
         return _error(str(e), 500)
+
+@api.get("/posts/<int:post_id>/audio")
+def api_get_audio_url(post_id: int):
+    """
+    Get a signed URL for the original audio file.
+    """
+    expires_in = request.args.get("expires_in", default=3600, type=int)
+    
+    try:
+        audio_data = get_original_audio_url(post_id, expires_in=expires_in)
+        return jsonify(audio_data)
+    except ValueError as e:
+        return _error(str(e), 404)
+    except RuntimeError as e:
+        return _error(str(e), 500)
+    except Exception as e:
+        return _error(f"Failed to get audio URL: {e}", 500)

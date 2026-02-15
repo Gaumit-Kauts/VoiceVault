@@ -23,7 +23,7 @@ export default function Feed({ user }) {
       const params = {
         page,
         limit: 20,
-        user_id: user.user_id,
+        current_user_id: user.user_id, // For backend privacy checks
       }
       
       if (visibilityFilter !== 'all') {
@@ -31,7 +31,14 @@ export default function Feed({ user }) {
       }
 
       const response = await api.getPosts(params)
-      setPosts(response.posts || [])
+      let filteredPosts = response.posts || []
+      
+      // Frontend privacy filter: only show posts if they're public OR user is the author
+      filteredPosts = filteredPosts.filter(post => {
+        return post.visibility === 'public' || post.user_id === user.user_id
+      })
+      
+      setPosts(filteredPosts)
     } catch (err) {
       setError(err.message)
     } finally {

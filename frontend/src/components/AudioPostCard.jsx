@@ -1,6 +1,17 @@
-import { Play, Volume2, MoreVertical, Clock } from 'lucide-react'
+import { Play, Pause, Volume2, MoreVertical, Clock, ChevronDown, ChevronUp } from 'lucide-react'
+import { useState, useRef, useEffect } from 'react'
+import { api } from '../api'
 
-export default function AudioPostCard({ post, onPlay }) {
+export default function AudioPostCard({ post }) {
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [currentTime, setCurrentTime] = useState(0)
+  const [duration, setDuration] = useState(0)
+  const [volume, setVolume] = useState(1)
+  const [transcript, setTranscript] = useState(null)
+  const [loadingTranscript, setLoadingTranscript] = useState(false)
+  const [transcriptExpanded, setTranscriptExpanded] = useState(false)
+  const audioRef = useRef(null)
+
   const formatDate = (dateString) => {
     const date = new Date(dateString)
     const now = new Date()
@@ -11,6 +22,92 @@ export default function AudioPostCard({ post, onPlay }) {
     if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h ago`
     return `${Math.floor(diffMins / 1440)}d ago`
   }
+
+  const formatTime = (seconds) => {
+    if (!seconds || isNaN(seconds)) return '0:00'
+    const mins = Math.floor(seconds / 60)
+    const secs = Math.floor(seconds % 60)
+    return `${mins}:${secs.toString().padStart(2, '0')}`
+  }
+
+  // Load transcript on mount if post is ready
+  useEffect(() => {
+    if (post.status === 'ready' && !transcript && !loadingTranscript) {
+      loadTranscript()
+    }
+  }, [post.post_id, post.status])
+
+  const loadTranscript = async () => {
+    setLoadingTranscript(true)
+    try {
+      const metadata = await api.getPostMetadata(post.post_id)
+      if (metadata && metadata.metadata) {
+        const metadataObj = JSON.parse(metadata.metadata)
+        const promptText = metadataObj.prompt || ''
+        const transcriptMatch = promptText.match(/Transcript:\n([\s\S]*?)\n\nAnswer user questions/)
+        if (transcriptMatch) {
+          setTranscript(transcriptMatch[1].trim())
+        } else {
+          setTranscript('Transcript not available')
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load transcript:', err)
+      setTranscript('Failed to load transcript')
+    } finally {
+      setLoadingTranscript(false)
+    }
+  }
+
+  const togglePlay = () => {
+    if (!audioRef.current) return
+    
+    if (isPlaying) {
+      audioRef.current.pause()
+    } else {
+      audioRef.current.play()
+    }
+    setIsPlaying(!isPlaying)
+  }
+
+  const handleTimeUpdate = () => {
+    if (audioRef.current) {
+      setCurrentTime(audioRef.current.currentTime)
+    }
+  }
+
+  const handleLoadedMetadata = () => {
+    if (audioRef.current) {
+      setDuration(audioRef.current.duration)
+    }
+  }
+
+  const handleSeek = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const percentage = x / rect.width
+    const newTime = percentage * duration
+    
+    if (audioRef.current) {
+      audioRef.current.currentTime = newTime
+      setCurrentTime(newTime)
+    }
+  }
+
+  const handleVolumeChange = (e) => {
+    const newVolume = parseFloat(e.target.value)
+    setVolume(newVolume)
+    if (audioRef.current) {
+      audioRef.current.volume = newVolume
+    }
+  }
+
+  const handleEnded = () => {
+    setIsPlaying(false)
+    setCurrentTime(0)
+  }
+
+  const progress = duration > 0 ? (currentTime / duration) * 100 : 0
 
   return (
     <article className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow">
@@ -53,28 +150,99 @@ export default function AudioPostCard({ post, onPlay }) {
 
         {/* Audio Player - Only show if ready */}
         {post.status === 'ready' && (
-          <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-            <div className="flex items-center gap-4">
-              <button 
-                onClick={() => onPlay?.(post)}
-                className="w-10 h-10 bg-[#f4b840] hover:bg-[#e5a930] rounded-full flex items-center justify-center text-[#1a1a1a] transition-colors"
-              >
-                <Play size={16} fill="currentColor" />
-              </button>
-              <div className="flex-1">
-                <div className="h-1.5 bg-gray-300 rounded-full overflow-hidden mb-2">
-                  <div className="h-full w-0 bg-[#f4b840] rounded-full"></div>
+          <>
+            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+              {/* Hidden audio element */}
+              <audio
+                ref={audioRef}
+                src={post.audio_path}
+                onTimeUpdate={handleTimeUpdate}
+                onLoadedMetadata={handleLoadedMetadata}
+                onEnded={handleEnded}
+                preload="metadata"
+              />
+
+              <div className="flex items-center gap-4">
+                <button 
+                  onClick={togglePlay}
+                  className="w-10 h-10 bg-[#f4b840] hover:bg-[#e5a930] rounded-full flex items-center justify-center text-[#1a1a1a] transition-colors"
+                >
+                  {isPlaying ? (
+                    <Pause size={16} fill="currentColor" />
+                  ) : (
+                    <Play size={16} fill="currentColor" />
+                  )}
+                </button>
+                <div className="flex-1">
+                  <div 
+                    className="h-1.5 bg-gray-300 rounded-full overflow-hidden mb-2 cursor-pointer"
+                    onClick={handleSeek}
+                  >
+                    <div 
+                      className="h-full bg-[#f4b840] rounded-full transition-all"
+                      style={{ width: `${progress}%` }}
+                    ></div>
+                  </div>
+                  <div className="flex justify-between text-xs text-gray-600">
+                    <span>{formatTime(currentTime)}</span>
+                    <span>{formatTime(duration)}</span>
+                  </div>
                 </div>
-                <div className="flex justify-between text-xs text-gray-600">
-                  <span>0:00</span>
-                  <span>--:--</span>
+                <div className="flex items-center gap-2">
+                  <Volume2 size={18} className="text-gray-600" />
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value={volume}
+                    onChange={handleVolumeChange}
+                    className="w-16 h-1.5 bg-gray-300 rounded-full appearance-none cursor-pointer"
+                    style={{
+                      background: `linear-gradient(to right, #f4b840 0%, #f4b840 ${volume * 100}%, #d1d5db ${volume * 100}%, #d1d5db 100%)`
+                    }}
+                  />
                 </div>
               </div>
-              <button className="text-gray-600 hover:text-gray-900">
-                <Volume2 size={18} />
-              </button>
             </div>
-          </div>
+
+            {/* Transcript Section - Always shown */}
+            <div className="mt-4 border border-gray-200 rounded-lg overflow-hidden">
+              <button
+                onClick={() => setTranscriptExpanded(!transcriptExpanded)}
+                className="w-full flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100 transition-colors"
+              >
+                <span className="text-sm font-medium text-gray-900">Transcript</span>
+                {loadingTranscript ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
+                ) : (
+                  transcriptExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />
+                )}
+              </button>
+              
+              {transcript && (
+                <div className={`bg-white transition-all ${transcriptExpanded ? 'max-h-96' : 'max-h-24'} overflow-y-auto`}>
+                  <div className="p-4">
+                    <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
+                      {transcript}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {!transcript && !loadingTranscript && (
+                <div className="p-4 bg-white">
+                  <p className="text-sm text-gray-500 italic">No transcript available</p>
+                </div>
+              )}
+
+              {loadingTranscript && (
+                <div className="p-4 bg-white text-center">
+                  <p className="text-sm text-gray-500">Loading transcript...</p>
+                </div>
+              )}
+            </div>
+          </>
         )}
 
         {/* Processing Status */}

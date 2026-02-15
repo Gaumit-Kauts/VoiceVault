@@ -3,7 +3,7 @@
  * Handles all communication with Flask API
  */
 
-const API_BASE_URL = 'http://127.0.0.1:5000/api';
+const API_BASE_URL = 'http://localhost:5000/api';
 
 class ApiClient {
   constructor() {
@@ -107,7 +107,8 @@ class ApiClient {
     if (params.page) queryParams.append('page', params.page);
     if (params.limit) queryParams.append('limit', params.limit);
     if (params.visibility) queryParams.append('visibility', params.visibility);
-    if (params.user_id) queryParams.append('user_id', params.user_id);
+    // Pass current_user_id for privacy checks (not filtering by author)
+    if (params.current_user_id) queryParams.append('current_user_id', params.current_user_id);
 
     return this.request(`/posts?${queryParams.toString()}`);
   }
@@ -130,6 +131,10 @@ class ApiClient {
   async deletePost(postId) {
     // Update status to mark as deleted
     return this.updatePost(postId, { status: 'deleted' });
+  }
+
+  async getPostMetadata(postId) {
+    return this.request(`/posts/${postId}/metadata`);
   }
 
   // ==================== Post Files ====================

@@ -1,7 +1,7 @@
-import { Search, User, Volume2 } from 'lucide-react'
+import { Search, LogOut } from 'lucide-react'
 import { useState } from 'react'
 
-export default function Header({ user, onSearch, onLogout }) {
+export default function Header({ onSearch, onLogout }) {
   const [searchQuery, setSearchQuery] = useState('')
 
   const handleSearch = (e) => {
@@ -16,7 +16,9 @@ export default function Header({ user, onSearch, onLogout }) {
         {/* Left: Logo */}
         <div className="flex items-center gap-3 flex-shrink-0">
           <div className="w-8 h-8 bg-[#f4b840] rounded-lg flex items-center justify-center">
-            <Volume2 size={18} className="text-white" />
+            <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+            </svg>
           </div>
           <h1 className="text-lg font-bold text-gray-900">VoiceVault</h1>
         </div>
@@ -35,24 +37,15 @@ export default function Header({ user, onSearch, onLogout }) {
           </div>
         </div>
 
-        {/* Right: User Info / Login */}
+        {/* Right: Logout */}
         <div className="flex items-center gap-3 flex-shrink-0">
-          {user ? (
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-gray-700">{user.display_name || user.email}</span>
-              <button
-                onClick={onLogout}
-                className="text-sm text-gray-600 hover:text-gray-900"
-              >
-                Logout
-              </button>
-            </div>
-          ) : (
-            <button className="bg-[#f4b840] hover:bg-[#e5a930] text-[#1a1a1a] px-4 py-2 rounded text-sm font-medium flex items-center gap-2">
-              <User size={16} />
-              Log In
-            </button>
-          )}
+          <button
+            onClick={onLogout}
+            className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 px-3 py-2 rounded hover:bg-gray-100 transition-colors"
+          >
+            <LogOut size={16} />
+            <span>Logout</span>
+          </button>
         </div>
       </div>
     </header>
