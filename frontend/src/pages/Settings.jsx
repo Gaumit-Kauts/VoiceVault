@@ -1,218 +1,129 @@
 import { useState } from 'react'
-import { User, Lock, Bell, Globe, Trash2 } from 'lucide-react'
+import { User, Trash2 } from 'lucide-react'
 
-export default function Settings({ userSettings, onUpdate }) {
-  const [settings, setSettings] = useState(userSettings || {
-    notifications: {
-      newFollowers: true,
-      comments: true,
-      likes: false,
-      mentions: true,
-    },
-    privacy: {
-      profileVisibility: 'public',
-      showListeningHistory: true,
-      allowComments: true,
-    },
-    account: {
-      email: 'john.doe@email.com',
-      username: 'johndoe',
+export default function Settings({ user, onUpdate }) {
+  const [displayName, setDisplayName] = useState(user?.display_name || '')
+  const [bio, setBio] = useState(user?.bio || '')
+  const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState(null)
+
+  const handleSave = async () => {
+    setSaving(true)
+    setMessage(null)
+
+    try {
+      // In a real app, you'd call an update user API
+      // For now, just simulate success
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      
+      onUpdate?.({
+        ...user,
+        display_name: displayName,
+        bio: bio
+      })
+      
+      setMessage({ type: 'success', text: 'Settings saved successfully!' })
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Failed to save settings: ' + error.message })
+    } finally {
+      setSaving(false)
     }
-  })
-
-  const handleToggle = (category, setting) => {
-    setSettings(prev => ({
-      ...prev,
-      [category]: {
-        ...prev[category],
-        [setting]: !prev[category][setting]
-      }
-    }))
   }
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       <h2 className="text-2xl font-bold text-gray-900">Settings</h2>
 
-      {/* Account Settings */}
+      {message && (
+        <div className={`p-4 rounded-lg border ${
+          message.type === 'success' 
+            ? 'bg-green-50 border-green-200 text-green-800'
+            : 'bg-red-50 border-red-200 text-red-800'
+        }`}>
+          <p className="text-sm">{message.text}</p>
+        </div>
+      )}
+
+      {/* Account Information */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
           <User size={20} />
           Account Information
         </h3>
-
+        
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-900 mb-2">Username</label>
-            <input
-              type="text"
-              value={settings.account.username}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#f4b840] focus:border-transparent"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-900 mb-2">Email</label>
+            <label className="block text-sm font-medium text-gray-900 mb-2">
+              Email
+            </label>
             <input
               type="email"
-              value={settings.account.email}
+              value={user?.email || ''}
+              disabled
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 cursor-not-allowed"
+            />
+            <p className="text-xs text-gray-500 mt-1">Email cannot be changed</p>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-900 mb-2">
+              Display Name
+            </label>
+            <input
+              type="text"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              placeholder="Your display name"
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#f4b840] focus:border-transparent"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-900 mb-2">Bio</label>
+            <label className="block text-sm font-medium text-gray-900 mb-2">
+              Bio
+            </label>
             <textarea
+              value={bio}
+              onChange={(e) => setBio(e.target.value)}
               rows={3}
               placeholder="Tell us about yourself..."
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#f4b840] focus:border-transparent resize-none"
             />
           </div>
-        </div>
-      </div>
 
-      {/* Privacy Settings */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-          <Lock size={20} />
-          Privacy
-        </h3>
-
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-medium text-gray-900">Profile Visibility</p>
-              <p className="text-sm text-gray-600">Who can see your profile</p>
-            </div>
-            <select className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#f4b840]">
-              <option value="public">Public</option>
-              <option value="followers">Followers Only</option>
-              <option value="private">Private</option>
-            </select>
-          </div>
-
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-medium text-gray-900">Show Listening History</p>
-              <p className="text-sm text-gray-600">Allow others to see what you've listened to</p>
-            </div>
-            <button
-              onClick={() => handleToggle('privacy', 'showListeningHistory')}
-              className={`relative w-12 h-6 rounded-full transition-colors ${
-                settings.privacy.showListeningHistory ? 'bg-[#f4b840]' : 'bg-gray-300'
-              }`}
-            >
-              <div
-                className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${
-                  settings.privacy.showListeningHistory ? 'translate-x-6' : 'translate-x-0'
-                }`}
-              />
-            </button>
-          </div>
-
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-medium text-gray-900">Allow Comments</p>
-              <p className="text-sm text-gray-600">Let others comment on your posts</p>
-            </div>
-            <button
-              onClick={() => handleToggle('privacy', 'allowComments')}
-              className={`relative w-12 h-6 rounded-full transition-colors ${
-                settings.privacy.allowComments ? 'bg-[#f4b840]' : 'bg-gray-300'
-              }`}
-            >
-              <div
-                className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${
-                  settings.privacy.allowComments ? 'translate-x-6' : 'translate-x-0'
-                }`}
-              />
-            </button>
+          <div>
+            <label className="block text-sm font-medium text-gray-900 mb-2">
+              User ID
+            </label>
+            <input
+              type="text"
+              value={user?.user_id || ''}
+              disabled
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 cursor-not-allowed"
+            />
+            <p className="text-xs text-gray-500 mt-1">Your unique identifier</p>
           </div>
         </div>
       </div>
 
-      {/* Notification Settings */}
+      {/* Account Created */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-          <Bell size={20} />
-          Notifications
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">
+          Account Details
         </h3>
-
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-medium text-gray-900">New Followers</p>
-              <p className="text-sm text-gray-600">When someone follows you</p>
-            </div>
-            <button
-              onClick={() => handleToggle('notifications', 'newFollowers')}
-              className={`relative w-12 h-6 rounded-full transition-colors ${
-                settings.notifications.newFollowers ? 'bg-[#f4b840]' : 'bg-gray-300'
-              }`}
-            >
-              <div
-                className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${
-                  settings.notifications.newFollowers ? 'translate-x-6' : 'translate-x-0'
-                }`}
-              />
-            </button>
+        
+        <div className="space-y-2 text-sm">
+          <div className="flex justify-between">
+            <span className="text-gray-600">Account Created</span>
+            <span className="font-medium text-gray-900">
+              {user?.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}
+            </span>
           </div>
-
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-medium text-gray-900">Comments</p>
-              <p className="text-sm text-gray-600">When someone comments on your post</p>
-            </div>
-            <button
-              onClick={() => handleToggle('notifications', 'comments')}
-              className={`relative w-12 h-6 rounded-full transition-colors ${
-                settings.notifications.comments ? 'bg-[#f4b840]' : 'bg-gray-300'
-              }`}
-            >
-              <div
-                className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${
-                  settings.notifications.comments ? 'translate-x-6' : 'translate-x-0'
-                }`}
-              />
-            </button>
-          </div>
-
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-medium text-gray-900">Likes</p>
-              <p className="text-sm text-gray-600">When someone likes your post</p>
-            </div>
-            <button
-              onClick={() => handleToggle('notifications', 'likes')}
-              className={`relative w-12 h-6 rounded-full transition-colors ${
-                settings.notifications.likes ? 'bg-[#f4b840]' : 'bg-gray-300'
-              }`}
-            >
-              <div
-                className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${
-                  settings.notifications.likes ? 'translate-x-6' : 'translate-x-0'
-                }`}
-              />
-            </button>
-          </div>
-
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-medium text-gray-900">Mentions</p>
-              <p className="text-sm text-gray-600">When someone mentions you</p>
-            </div>
-            <button
-              onClick={() => handleToggle('notifications', 'mentions')}
-              className={`relative w-12 h-6 rounded-full transition-colors ${
-                settings.notifications.mentions ? 'bg-[#f4b840]' : 'bg-gray-300'
-              }`}
-            >
-              <div
-                className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${
-                  settings.notifications.mentions ? 'translate-x-6' : 'translate-x-0'
-                }`}
-              />
-            </button>
+          <div className="flex justify-between">
+            <span className="text-gray-600">Last Updated</span>
+            <span className="font-medium text-gray-900">
+              {user?.updated_at ? new Date(user.updated_at).toLocaleDateString() : 'N/A'}
+            </span>
           </div>
         </div>
       </div>
@@ -223,27 +134,35 @@ export default function Settings({ userSettings, onUpdate }) {
           <Trash2 size={20} />
           Danger Zone
         </h3>
-
-        <div className="space-y-3">
-          <button className="w-full px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">
-            Export My Data
-          </button>
-          <button className="w-full px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors">
-            Delete Account
-          </button>
-        </div>
+        
+        <p className="text-sm text-gray-600 mb-4">
+          Once you delete your account, there is no going back. All your archives and data will be permanently deleted.
+        </p>
+        
+        <button className="w-full px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors">
+          Delete Account
+        </button>
       </div>
 
       {/* Save Button */}
       <div className="flex gap-3">
-        <button className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors">
+        <button
+          onClick={() => {
+            setDisplayName(user?.display_name || '')
+            setBio(user?.bio || '')
+            setMessage(null)
+          }}
+          className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+          disabled={saving}
+        >
           Cancel
         </button>
         <button
-          onClick={() => onUpdate?.(settings)}
-          className="flex-1 px-4 py-2 bg-[#f4b840] hover:bg-[#e5a930] text-[#1a1a1a] rounded-lg font-medium transition-colors"
+          onClick={handleSave}
+          disabled={saving}
+          className="flex-1 px-4 py-2 bg-[#f4b840] hover:bg-[#e5a930] text-[#1a1a1a] rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          Save Changes
+          {saving ? 'Saving...' : 'Save Changes'}
         </button>
       </div>
     </div>
