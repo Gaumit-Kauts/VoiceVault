@@ -4,18 +4,18 @@ Includes auth, upload+transcription, history, and RAG search workflow.
 """
 
 import hashlib
-import io
 import json
 import os
 import uuid
-import re
-import zipfile
 from pathlib import Path
-from typing import Any, List
+import io
+import zipfile
+from flask import send_file
+
 
 from dotenv import load_dotenv
 from faster_whisper import WhisperModel
-from flask import Blueprint, jsonify, request, send_file
+from flask import Blueprint, jsonify, request
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
@@ -25,8 +25,6 @@ from db_queries import (
     add_rag_chunks,
     create_audio_post,
     create_user,
-    download_storage_object_by_stored_path,
-    get_archive_file_by_role,
     get_archive_metadata,
     get_original_audio_url,
     get_archive_rights,
@@ -40,7 +38,6 @@ from db_queries import (
     list_rag_chunks,
     list_user_history,
     search_rag_chunks,
-    search_rag_chunks_vector,
     update_audio_post,
     upload_storage_object,
     upsert_archive_metadata,
@@ -103,7 +100,7 @@ def _build_prompt(transcript_text: str, title: str) -> str:
         f"{transcript_text}\n\n"
         "Answer user questions grounded in this transcript."
     )
-def _add_audio_url(post: dict[str, Any]) -> dict[str, Any]:
+def _add_audio_url(post: Dict[str, Any]) -> Dict[str, Any]:
     """Add signed audio URL to post if ready"""
     if post.get("status") == "ready":
         try:
@@ -112,29 +109,6 @@ def _add_audio_url(post: dict[str, Any]) -> dict[str, Any]:
         except:
             pass
     return post
-
-
-def _local_embedding(text: str, dimensions: int = 1536) -> List[float]:
-    """
-    Free deterministic embedding fallback (offline).
-    Replace with model-based embeddings later if needed.
-    """
-    vector = [0.0] * dimensions
-    tokens = re.findall(r"[A-Za-z0-9']+", text.lower())
-    if not tokens:
-        return vector
-
-    for token in tokens:
-        digest = hashlib.sha256(token.encode("utf-8")).digest()
-        idx = int.from_bytes(digest[:4], "big") % dimensions
-        sign = 1.0 if (digest[4] & 1) == 0 else -1.0
-        weight = 1.0 + (digest[5] / 255.0) * 0.25
-        vector[idx] += sign * weight
-
-    norm = sum(v * v for v in vector) ** 0.5
-    if norm > 0:
-        vector = [v / norm for v in vector]
-    return vector
 
 
 
@@ -304,7 +278,7 @@ def api_upload_post():
                     "end_sec": float(seg.end),
                     "text": segment_text,
                     "confidence": float(seg.avg_logprob) if seg.avg_logprob is not None else None,
-                    "embedding": _local_embedding(segment_text),
+                    "embedding": None,
                 }
             )
 
@@ -390,31 +364,17 @@ def api_user_history(user_id: int):
 def api_rag_search():
     query_text = (request.args.get("q") or "").strip()
     user_id = request.args.get("user_id", type=int)
-    query_embedding_raw = request.args.get("query_embedding")
     page = request.args.get("page", default=1, type=int)
     limit = request.args.get("limit", default=30, type=int)
 
     if not user_id:
         return _error("'user_id' is required.", 400)
+    if not query_text:
+        return _error("'q' is required.", 400)
 
     try:
-        if query_embedding_raw:
-            try:
-                parsed = json.loads(query_embedding_raw)
-                if not isinstance(parsed, list):
-                    return _error("'query_embedding' must be a JSON array.", 400)
-                query_embedding = [float(v) for v in parsed]
-            except Exception:
-                return _error("Invalid 'query_embedding'. Example: [0.1,0.2,...]", 400)
-
-            rows = search_rag_chunks_vector(user_id=user_id, query_embedding=query_embedding, limit=limit)
-            return jsonify({"results": rows, "mode": "vector", "limit": min(max(1, limit), 100)})
-
-        if not query_text:
-            return _error("'q' is required when 'query_embedding' is not provided.", 400)
-
         rows = search_rag_chunks(user_id=user_id, query_text=query_text, page=page, limit=limit)
-        return jsonify({"results": rows, "mode": "text", "page": page, "limit": min(max(1, limit), 100)})
+        return jsonify({"results": rows, "page": page, "limit": min(max(1, limit), 100)})
     except Exception as e:
         return _error(str(e), 500)
 
@@ -458,19 +418,19 @@ def api_list_posts():
     limit = request.args.get("limit", default=20, type=int)
     visibility = request.args.get("visibility")
     current_user_id = request.args.get("current_user_id", type=int)  # NEW LINE
-    
+
     try:
         rows = list_audio_posts(page=page, limit=limit, visibility=visibility)
-        
+
         # NEW: Filter private posts
         if current_user_id:
             rows = [p for p in rows if p.get('visibility') == 'public' or p.get('user_id') == current_user_id]
         else:
             rows = [p for p in rows if p.get('visibility') == 'public']
-        
+
         # NEW: Add audio URLs - CHANGE THIS LINE ONLY
         rows = [_add_audio_url(post) for post in rows]
-        
+
         return jsonify({"posts": rows, "page": page, "limit": min(max(1, limit), 100)})
     except Exception as e:
         return _error(str(e), 500)
@@ -531,64 +491,6 @@ def api_post_audio_url(post_id: int):
         return _error(str(e), 404)
     except Exception as e:
         return _error(str(e), 500)
-
-
-@api.get("/posts/<int:post_id>/archive.zip")
-def api_post_archive_zip(post_id: int):
-    """
-    Download a complete archive zip for a post.
-    Private posts require owner user_id in query params.
-    """
-    row = get_audio_post_by_id(post_id)
-    if not row:
-        return _error("Post not found.", 404)
-
-    visibility = row.get("visibility")
-    owner_id = row.get("user_id")
-    requester_id = request.args.get("user_id", type=int)
-
-    if visibility == "private" and requester_id != owner_id:
-        return _error("Not authorized to download this private archive.", 403)
-
-    try:
-        bundle = get_post_bundle(post_id)
-        if not bundle:
-            return _error("Post bundle not found.", 404)
-
-        archive_buf = io.BytesIO()
-        with zipfile.ZipFile(archive_buf, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
-            # Always include core JSON artifacts.
-            zf.writestr("post.json", json.dumps(bundle.get("post", {}), indent=2, default=str))
-            zf.writestr("metadata.json", json.dumps(bundle.get("metadata", {}), indent=2, default=str))
-            zf.writestr("rights.json", json.dumps(bundle.get("rights", {}), indent=2, default=str))
-            zf.writestr("rag_chunks.json", json.dumps(bundle.get("rag_chunks", []), indent=2, default=str))
-            zf.writestr("audit_log.json", json.dumps(bundle.get("audit_log", []), indent=2, default=str))
-
-            # Derive transcript from rag chunks.
-            chunks = bundle.get("rag_chunks", []) or []
-            transcript_text = " ".join(
-                (chunk.get("text") or "").strip() for chunk in chunks if chunk.get("text")
-            ).strip()
-            if transcript_text:
-                zf.writestr("transcript.txt", transcript_text)
-
-            # Include original media from Supabase Storage if present.
-            original_file = get_archive_file_by_role(post_id, "original_audio")
-            if original_file and original_file.get("path"):
-                original_bytes = download_storage_object_by_stored_path(original_file["path"])
-                source_name = original_file["path"].split("/")[-1] or f"post_{post_id}_original.bin"
-                zf.writestr(f"original/{source_name}", original_bytes)
-
-        archive_buf.seek(0)
-        download_name = f"voicevault_post_{post_id}_archive.zip"
-        return send_file(
-            archive_buf,
-            mimetype="application/zip",
-            as_attachment=True,
-            download_name=download_name,
-        )
-    except Exception as e:
-        return _error(f"Failed to build archive zip: {e}", 500)
 
 
 @api.post("/posts/<int:post_id>/files")
@@ -707,3 +609,36 @@ def api_post_audit(post_id: int):
         return jsonify({"logs": list_audit_logs(post_id=post_id, page=page, limit=limit)})
     except Exception as e:
         return _error(str(e), 500)
+
+@api.get("/posts/<int:post_id>/download")
+def download_post(post_id: int):
+    post = get_audio_post_by_id(post_id)
+    if not post:
+        return jsonify({"error": "Post not found"}), 404
+
+    files = list_archive_files(post_id)
+    metadata = get_archive_metadata(post_id) or {}
+
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
+        if metadata.get("metadata"):
+            zipf.writestr("metadata.json", json.dumps(metadata, indent=2))
+
+        for f in files:
+            try:
+                signed_url = get_original_audio_url(post_id)["signed_url"] if f["role"] == "original_audio" else None
+                if signed_url:
+                    r = requests.get(signed_url)
+                    if r.status_code == 200:
+                        filename = f"{f['role']}_{f['path'].split('/')[-1]}"
+                        zipf.writestr(filename, r.content)
+            except Exception as e:
+                print("Failed to add file:", e)
+
+    zip_buffer.seek(0)
+    return send_file(
+        zip_buffer,
+        mimetype="application/zip",
+        as_attachment=True,
+        download_name=f"{post['title'].replace(' ', '_')}.zip"
+    )
