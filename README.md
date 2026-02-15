@@ -1,84 +1,130 @@
-﻿# VoiceVault 
+# VoiceVault
 
-Schema-driven archival audio backend + frontend.
+VoiceVault is an archival audio app where users upload recordings, get speech-to-text transcripts, and search their archive with RAG-ready chunks.
 
-## What It Does
+## What The App Does
 
-- Register / login users
-- Upload original audio/video to Supabase Storage bucket (`archives`)
-- Create `audio_posts` records in Postgres
+- User registration and login
+- Upload audio/video recordings (private or public)
+- Store original media in Supabase Storage bucket (`archives`)
 - Transcribe media locally with `faster-whisper`
-- Save transcript chunks to `rag_chunks` (with embeddings)
-- Build prompt context and store in `archive_metadata`
-- Search user chunks with RAG endpoint (vector mode or text fallback)
+- Save transcript chunks to `rag_chunks`
+- Save prompt/context metadata to `archive_metadata`
+- View feed/history, open full post detail, play original audio
+- Edit and delete your own posts
+- Download a post as a ZIP bundle
+- Search transcript chunks for RAG use
+
+## Tech Stack
+
+- Backend: Flask (`backend/main.py`, `backend/api_routes.py`)
+- Data + storage: Supabase Postgres + Supabase Storage (`backend/db_queries.py`)
+- Frontend: React + Vite (`frontend/`)
+- Transcription: `faster-whisper` (local inference)
 
 ## Project Structure
 
-- `backend/main.py` Flask app entry
-- `backend/api_routes.py` API routes and upload/transcription flow
-- `backend/db_queries.py` Supabase DB/storage helpers
-- `schema.sql` database schema
-- `frontend/` React app
+- `schema.sql`: DB schema
+- `backend/main.py`: Flask app entrypoint
+- `backend/api_routes.py`: API routes and orchestration
+- `backend/db_queries.py`: Supabase table/storage functions
+- `frontend/src/App.jsx`: main app shell/navigation
+- `frontend/src/pages/`: Feed, Create, History, Search, Post detail, Settings
 
-## Environment (`backend/.env`)
+## Backend Environment
 
-Required:
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY` (service role key, not publishable key)
-- `SUPABASE_BUCKET=archives`
+Create `backend/.env`:
 
-Optional:
-- `BACKEND_UPLOAD_DIR=uploads`
-- `WHISPER_MODEL=base`
-- `WHISPER_DEVICE=cpu`
-- `WHISPER_COMPUTE_TYPE=int8`
+```env
+SUPABASE_URL=your_supabase_url
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+SUPABASE_BUCKET=archives
 
-## Run Backend
+# Optional
+BACKEND_UPLOAD_DIR=uploads
+WHISPER_MODEL=base
+WHISPER_DEVICE=cpu
+WHISPER_COMPUTE_TYPE=int8
+```
+
+Notes:
+- Use `SUPABASE_SERVICE_ROLE_KEY`, not publishable/anon key.
+- Ensure bucket name matches exactly (`archives`).
+
+## How To Start
+
+### 1. Setup database
+
+1. Open Supabase SQL editor.
+2. Run `schema.sql`.
+3. Confirm tables and storage bucket are created.
+
+### 2. Start backend
 
 ```bash
-cd backend
+cd TitanForge/backend
+pip install -r ../requirements.txt
 python main.py
 ```
 
-Backend runs on `http://localhost:5000`.
+Backend runs at `http://localhost:5000`.
 
-## Run Frontend
+### 3. Start frontend
 
 ```bash
-cd frontend
+cd TitanForge/frontend
 npm install
 npm run dev
 ```
 
-Set frontend API base to `http://127.0.0.1:5000/api` (or your backend host).
+Frontend runs at `http://localhost:5173` (default Vite).
 
-## Core API Endpoints
+## How To Use The App
+
+1. Register or log in from the landing screen.
+2. Go to `Make an Archive Post`.
+3. Fill title/description, choose visibility, upload an audio/video file.
+4. Wait for transcription to finish.
+5. Open `My Feed` or `History` to view the post.
+6. Click `View Post` to:
+- Play original audio
+- Read full transcript
+- See timestamped chunks
+- Download ZIP archive
+7. In `History`, use edit/delete actions for your own posts.
+8. Use `Search Archives` to query transcript chunks.
+
+## Main API Endpoints
 
 Auth:
 - `POST /api/auth/register`
 - `POST /api/auth/login`
 
-Upload + processing:
-- `POST /api/posts/upload` (multipart form-data: `file`, `user_id`, `title`, `visibility`, optional metadata)
+Upload and processing:
+- `POST /api/posts/upload`
 
-History + RAG:
-- `GET /api/users/<user_id>/history`
-- `GET /api/rag/search?user_id=<id>&q=<text>`
-- `GET /api/rag/search?user_id=<id>&query_embedding=[...]`
-
-Playback:
-- `GET /api/posts/<post_id>/audio-url?user_id=<id>` (required for private posts)
-- `GET /api/posts/<post_id>/archive.zip?user_id=<id>` (download archive package; required for private posts)
-
-Post data:
+Posts and history:
 - `GET /api/posts`
 - `GET /api/posts/<post_id>`
-- `GET /api/posts/<post_id>/bundle`
-- `GET /api/posts/<post_id>/files`
+- `PUT /api/posts/<post_id>/edit`
+- `DELETE /api/posts/<post_id>?user_id=<id>`
+- `GET /api/users/<user_id>/history`
+
+Playback and download:
+- `GET /api/posts/<post_id>/audio-url?user_id=<id>&expires_in=3600`
+- `GET /api/posts/<post_id>/download`
+
+RAG:
 - `GET /api/posts/<post_id>/chunks`
+- `GET /api/rag/search?user_id=<id>&q=<query>`
 
-## Notes
+## Common Issues
 
-- Original media is stored in Supabase Storage; DB stores the object path in `archive_files` (`role=original_audio`).
-- Transcript text/chunks/metadata/audit remain in Postgres tables.
-- If storage upload fails with RLS errors, verify service-role key and bucket policies.
+- `403 / RLS` during upload:
+  - Usually wrong key type. Use service role key in backend `.env`.
+- Audio not playing:
+  - Verify `archive_files.role='original_audio'` exists for that post.
+  - Verify bucket is `archives`.
+  - Restart backend after `.env` changes.
+- Whisper slow on CPU:
+  - Use a smaller model or faster machine/GPU settings.
