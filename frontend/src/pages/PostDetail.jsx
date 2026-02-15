@@ -16,13 +16,22 @@ export default function PostDetail({ postId, user, onBack }) {
   const [volume, setVolume] = useState(1)
   const [downloading, setDownloading] = useState(false)
   const audioRef = useRef(null)
-  const [audioSrc, setAudioSrc] = useState(null)
 
   useEffect(() => {
     if (postId) {
       loadPostData()
     }
   }, [postId])
+
+  // Add this useEffect in PostDetail
+useEffect(() => {
+  if (audioRef.current && post?.audio_url) {
+    console.log('Setting audio src:', post.audio_url)
+    audioRef.current.src = post.audio_url
+    audioRef.current.load()  // Force reload
+  }
+}, [post?.audio_url])
+
 
   const loadPostData = async () => {
     setLoading(true)
@@ -35,8 +44,6 @@ export default function PostDetail({ postId, user, onBack }) {
 
       // Load audio URL if available
       if (postData.audio_url && audioRef.current) {
-        setPost(postData)
-        setAudioSrc(postData.audio_url)
         audioRef.current.src = postData.audio_url
         audioRef.current.load()
       }
@@ -293,13 +300,11 @@ export default function PostDetail({ postId, user, onBack }) {
 
           <audio
             ref={audioRef}
-            src={audioSrc}
             onTimeUpdate={handleTimeUpdate}
             onLoadedMetadata={handleLoadedMetadata}
             onEnded={handleEnded}
             preload="metadata"
           />
-
 
           <div className="flex items-center gap-4 mb-4">
             <button

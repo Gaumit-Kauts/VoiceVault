@@ -209,10 +209,10 @@ export default function App() {
 
   // Main App
   return (
-    <div className="h-screen bg-gray-50 text-gray-800 flex flex-col overflow-hidden">
+    <div className="h-screen bg-white-50 text-gray-800 flex flex-col overflow-hidden">
       <Header onSearch={handleSearch} onLogout={handleLogout} onNavigateToSearch={handleNavigateToSearch} />
 
-      <div className="flex-1 flex overflow-hidden max-w-[1400px] mx-auto w-full">
+      <div className="flex-1 flex overflow-hidden max-w-[1550px] mx-auto w-full">
         <Sidebar user={user} activeTab={activeTab} onTabChange={handleTabChange} />
 
         <main className="flex-1 overflow-y-auto p-6">

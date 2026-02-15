@@ -11,9 +11,11 @@
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.18",
+    "howler": "^2.2.4",
     "lucide-react": "^0.564.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "react-howler": "^5.2.0",
     "tailwindcss": "^4.1.18"
   },
   "devDependencies": {
