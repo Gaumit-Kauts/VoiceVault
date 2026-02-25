@@ -8,7 +8,7 @@ VoiceVault is an archival audio app where users upload recordings, get speech-to
 - Upload audio/video recordings (private or public)
 - Store original media in Supabase Storage bucket (`archives`)
 - Transcribe media locally with `faster-whisper`
-- Save transcript chunks to `rag_chunks`
+- Save transcript chunks to `rag_chunks` (with `pgvector` embeddings support)
 - Save prompt/context metadata to `archive_metadata`
 - View feed/history, open full post detail, play original audio
 - Edit and delete your own posts
@@ -18,9 +18,9 @@ VoiceVault is an archival audio app where users upload recordings, get speech-to
 ## Tech Stack
 
 - Backend: Flask (`backend/main.py`, `backend/api_routes.py`)
-- Data + storage: Supabase Postgres + Supabase Storage (`backend/db_queries.py`)
+- Data + storage: Supabase Postgres (`pgvector`) + Supabase Storage (`backend/db_queries.py`)
 - Frontend: React + Vite (`frontend/`)
-- Transcription: `faster-whisper` (local inference)
+- Transcription: `faster-whisper` (local inference)`r`n- Embeddings: OpenAI embeddings (optional) or local embeddings via `EMBEDDING_PROVIDER`
 
 ## Project Structure
 
@@ -65,7 +65,7 @@ Notes:
 ### 2. Start backend
 
 ```bash
-cd TitanForge/backend
+cd VoiceVault/backend
 pip install -r ../requirements.txt
 python main.py
 ```
@@ -75,7 +75,7 @@ Backend runs at `http://localhost:5000`.
 ### 3. Start frontend
 
 ```bash
-cd TitanForge/frontend
+cd VoiceVault/frontend
 npm install
 npm run dev
 ```
@@ -131,3 +131,4 @@ RAG:
   - Restart backend after `.env` changes.
 - Whisper slow on CPU:
   - Use a smaller model or faster machine/GPU settings.
+
