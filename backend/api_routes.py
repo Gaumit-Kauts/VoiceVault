@@ -1,7 +1,3 @@
-"""
-Flask API routes aligned with TitanForge/schema.sql.
-Includes auth, upload+transcription, history, and RAG search workflow.
-"""
 
 import hashlib
 import json
